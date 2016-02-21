@@ -1,0 +1,10 @@
+body .ace {
+  width: 50%;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+
+#output {
+  left: 50%;
+}
