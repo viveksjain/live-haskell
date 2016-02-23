@@ -23,13 +23,16 @@ $(document).ready(function () {
 
 $(document).keyup(function (ev) {
   // Enter key
-  if (ev.which == 13) {
+  if (ev.which == 13 && !(ev.metaKey || ev.ctrlKey)) {
     evaluateCode();
   }
 });
 
 function evaluateCode() {
+
   $.post('evaluate', {script: editor.getValue()}, function (result) {
+    console.log(result);
+    console.log(typeof result);
     output.setValue(result.output || result.error, 1);
   });
 }
