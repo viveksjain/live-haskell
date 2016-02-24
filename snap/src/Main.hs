@@ -2,7 +2,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Main where
 
-import Control.Applicative
 import Snap.Core
 import Snap.Util.FileServe
 import Snap.Http.Server
@@ -10,9 +9,10 @@ import Snap.Extras.JSON
 import Debug.Trace
 import System.Process
 import System.IO
-import Control.Monad.IO.Class
+import Control.Monad.IO.Class (liftIO)
 import Data.Aeson
-import Data.Text
+import Data.Text as Text (pack)
+import Data.ByteString as BS (ByteString, writeFile, hGetContents, null)
 import Data.ByteString.Char8 as BC (unpack)
 
 main :: IO ()
@@ -38,19 +38,28 @@ evalHandler = do
   case param' of
     Nothing -> return ()
     Just param -> do
-      output <- liftIO $ run $ BC.unpack param
-      writeJSON $ object $ [("output" :: Text) .= output]
+      (typ, output) <- liftIO $ run param
+      writeJSON $ object $ [(Text.pack typ) .= output]
 
-run :: String -> IO String
+run :: ByteString -> IO (String, String)
 run script = do
-  writeFile "/tmp/test.hs" script
+  BS.writeFile "/tmp/test.hs" script
   eval
 
-eval :: IO String
+eval :: IO (String, String)
 eval = do
-  (_, Just hout, _, _) <-
+  (_, Just hout, Just herr, _) <-
     createProcess (proc "runhaskell" ["/tmp/test.hs"]) {
-        std_out = CreatePipe
+        std_out = CreatePipe,
+        std_err = CreatePipe
     }
   hSetBuffering hout NoBuffering
-  hGetContents hout
+  hSetBuffering herr NoBuffering
+  out <- BS.hGetContents hout
+  err <- BS.hGetContents herr
+  return $ deplex (out, err)
+  where
+    deplex :: (BS.ByteString, BS.ByteString) -> (String, String)
+    deplex (out, err) = if BS.null out
+      then ("error", BC.unpack err)
+      else ("output", BC.unpack out)
