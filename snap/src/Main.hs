@@ -6,16 +6,17 @@ import Snap.Core
 import Snap.Util.FileServe
 import Snap.Http.Server
 import Snap.Extras.JSON
-import Debug.Trace
-import System.Process
-import System.IO
-import Control.Monad (liftM)
+
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson
-import Data.Text as Text (pack)
-import Data.ByteString as BS (ByteString, writeFile, hGetContents, null, empty)
-import Data.ByteString.Char8 as BC (pack, unpack)
+import Data.ByteString as BS (ByteString, empty, writeFile)
 import Data.List as List (elemIndices)
+import Data.Map.Strict as Map (Map, fromList, mapKeys, map, null, toList)
+import Data.Maybe (fromMaybe)
+import Data.Text as Text (pack)
+import Debug.Trace
+import System.IO
+import System.Process
 
 main :: IO ()
 main = startSession >>= quickHttpServe . site
@@ -40,10 +41,10 @@ evalHandler session = do
   case param' of
     Nothing -> return ()
     Just param -> do
-      (typ, output) <- liftIO $ run session param
-      writeJSON $ object $ [(Text.pack typ) .= output]
+      evalOutput <- liftIO $ run session param :: Snap EvalOutput
+      writeJSON evalOutput
 
-run :: ReplSession -> ByteString -> IO (String, String)
+run :: ReplSession -> ByteString -> IO EvalOutput
 run session script = do
   BS.writeFile "/tmp/test.hs" script
   reload session
@@ -69,18 +70,26 @@ data ReplSession = ReplSession {
   ph :: ProcessHandle
 }
 
-reload :: ReplSession -> IO (String, String)
+data EvalOutput = EvalOutput {
+  output :: String,         -- from std_out
+  error :: String,          -- from std err
+  errors :: Map Int String  -- map from line numbers to error messages
+}
+
+instance ToJSON EvalOutput where
+  toJSON (EvalOutput out err errs) = object ["output" .= out, "error" .= err, "errors" .= errs]
+
+instance (Show k, ToJSON v) => ToJSON (Map k v) where
+  toJSON m | Map.null m = object []
+           | otherwise  = object . Map.toList . Map.map toJSON . (Map.mapKeys (\k -> Text.pack . show $ k)) $ m
+
+reload :: ReplSession -> IO EvalOutput
 reload (ReplSession hin hout herr _) = do
-    hPutStrLn hin ":r\n"
+    hPutStrLn hin ":r"
     hFlush hin
     out <- readLines hout
     err <- readLines herr
-    return $ deplex (out, err)
-  where
-    deplex :: (String, String) -> (String, String)
-    deplex (out, err) = if err == []
-      then ("output", out)
-      else ("error", err)
+    return $ EvalOutput out err $ Map.fromList . (fromMaybe []) $ extractErrorDetail err
 
 readLines :: Handle -> IO String
 readLines h = loop
@@ -95,17 +104,18 @@ readLines h = loop
           return $ line ++ "\n" ++ rest
         else return []
 
-extractLineNumber :: String -> Maybe Int
-extractLineNumber s =
+extractErrorDetail :: String -> Maybe [(Int, String)]
+extractErrorDetail s =
   let idxs = List.elemIndices ':' s :: [Int]
       slice :: Int -> Int -> String
       slice start end = take (end - (start+1)) . drop (start+1) $ s
       parse :: String -> Maybe Int
-      parse input =
-        case reads input :: [(Int, String)] of
-          [(i, "")] -> Just i
-          _ -> Nothing
+      parse input = case reads input :: [(Int, String)] of
+        [(i, "")] -> Just i
+        _ -> Nothing
+      extractLineNumber :: Maybe Int
+      extractLineNumber = parse $ slice (idxs!!0) (idxs!!1)
   in
-    if length idxs < 2
+    if length idxs < 3
     then Nothing
-    else parse $ slice (idxs!!0) (idxs!!1)
+    else extractLineNumber >>= \lineNum -> Just [(lineNum, slice (1 + idxs!!2) (length s))]
