@@ -94,3 +94,18 @@ readLines h = loop
           rest <- loop
           return $ line ++ "\n" ++ rest
         else return []
+
+extractLineNumber :: String -> Maybe Int
+extractLineNumber s =
+  let idxs = List.elemIndices ':' s :: [Int]
+      slice :: Int -> Int -> String
+      slice start end = take (end - (start+1)) . drop (start+1) $ s
+      parse :: String -> Maybe Int
+      parse input =
+        case reads input :: [(Int, String)] of
+          [(i, "")] -> Just i
+          _ -> Nothing
+  in
+    if length idxs < 2
+    then Nothing
+    else parse $ slice (idxs!!0) (idxs!!1)
