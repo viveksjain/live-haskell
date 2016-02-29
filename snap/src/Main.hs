@@ -51,8 +51,9 @@ evalHandler session = do
       writeJSON evalOutput
 
 run :: GHCISession -> ByteString -> IO EvalOutput
-run session script = runGHCI session $ do
-  res <- runStmt (BC.unpack script)
+run session script = do
+  res <- runGHCI session $ do
+    runStmt (BC.unpack script)
   case res of
     Left errs -> return $ EvalOutput "" "" $ Map.fromListWith (++) $ map (\(ErrorMessage _ line _ msg) -> (line, msg)) errs
     Right result -> return $ EvalOutput result "" Map.empty

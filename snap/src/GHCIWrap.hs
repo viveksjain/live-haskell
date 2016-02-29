@@ -9,6 +9,7 @@ module GHCIWrap(GHCISession,
                 ErrorMessage(..),
                 runStmt,
                 runType,
+                runImport,
                 runAddBreakpoint) where
 
 import System.Process
@@ -102,19 +103,23 @@ parseErrors s = case runErrorParser parseAllErrors s of
 
 data GHCISession = GHCISession !Handle !Handle !Handle !ProcessHandle
 
-newtype GHCI a = GHCI { getGHCI :: GHCISession -> IO a }
+newtype GHCI a = GHCI { getGHCI :: GHCISession -> IO (Either [ErrorMessage] a) }
 
-runGHCI :: GHCISession -> GHCI a -> IO a
+runGHCI :: GHCISession -> GHCI a -> IO (Either [ErrorMessage] a)
 runGHCI = flip getGHCI
 
 instance Monad GHCI where
-  return x = GHCI $ \_ -> return x
+  return x = GHCI $ \_ -> return $ Right x
   m >>= f = GHCI $ \session -> do
-    v <- getGHCI m session
-    getGHCI (f v) session
+    mv <- getGHCI m session
+    case mv of
+      Right v -> getGHCI (f v) session
+      -- pay attention that these two Left have different types
+      -- one is Either [ErrorMessage] a, the other is Either [ErrorMessage] b
+      Left errs -> return $ Left errs
 
 instance MonadIO GHCI where
-  liftIO m = GHCI $ \_ -> m
+  liftIO m = GHCI $ \_ -> m >>= return . Right
 
 instance Applicative GHCI where
   pure = return
@@ -127,7 +132,9 @@ class GHCIResult a where
   readGHCI :: String -> a
 
 sendGHCI :: String -> GHCI ()
-sendGHCI what = GHCI $ \(GHCISession stdin _ _ _) -> hPutStrLn stdin what
+sendGHCI what = GHCI $ \(GHCISession stdin _ _ _) -> do
+  hPutStrLn stdin what
+  return (Right ())
 
 hReadUntil :: Handle -> String -> IO String
 hReadUntil handle set = do
@@ -140,8 +147,8 @@ hReadUntil handle set = do
           return $ c : next
   loop
 
-readUntilPrompt :: GHCI String
-readUntilPrompt = GHCI $ \(GHCISession _ stdout _ _) -> do
+readUntilPrompt :: Handle -> IO String
+readUntilPrompt stdout = do
   hWaitForInput stdout (-1)
   let readLoop :: IO String
       readLoop = do
@@ -155,8 +162,8 @@ readUntilPrompt = GHCI $ \(GHCISession _ stdout _ _) -> do
           Just _ -> return [] -- and eat the prompt
   readLoop
 
-readErrors :: GHCI String
-readErrors = GHCI $ \(GHCISession _ _ stderr _) -> do
+readErrors :: Handle -> IO String
+readErrors stderr = do
   let readLoop :: IO String
       readLoop = do
         ready <- hReady stderr
@@ -169,29 +176,40 @@ readErrors = GHCI $ \(GHCISession _ _ stderr _) -> do
           else return []
   readLoop
 
-receiveGHCI :: GHCIResult a => GHCI (Either [ErrorMessage] a)
-receiveGHCI = do
-  result <- readUntilPrompt
+receiveGHCI :: GHCIResult a => GHCI a
+receiveGHCI = GHCI $ \(GHCISession _ stdout stderr _) -> do
+  result <- readUntilPrompt stdout
   if null result
-    then readErrors >>= return . Left . parseErrors
+    then readErrors stderr >>= return . Left . parseErrors
     else return $ Right $ readGHCI result
 
-runGHCICommand :: GHCIResult a => String -> GHCI (Either [ErrorMessage] a)
+newtype EmptyResult = EmptyResult { getEmptyResult :: () }
+instance GHCIResult EmptyResult where
+  readGHCI = const (EmptyResult ())
+
+runGHCICommand :: GHCIResult a => String -> GHCI a
 runGHCICommand cmd = do
   sendGHCI cmd
   receiveGHCI
 
+runGHCICommand_ :: String -> GHCI ()
+runGHCICommand_ cmd = do
+  sendGHCI cmd
+  receiveGHCI >>= return . getEmptyResult
+
 startGHCI :: IO GHCISession
 startGHCI = do
-  let args = (proc' "/usr/bin/ghci" ["ghci", "-XSafe"]) { std_in = CreatePipe,
-                                                          std_out = CreatePipe,
-                                                          std_err = CreatePipe }
+  let args = (proc' "/usr/bin/ghci" ["ghci"]) { std_in = CreatePipe,
+                                                std_out = CreatePipe,
+                                                std_err = CreatePipe }
   (Just stdin, Just stdout, Just stderr, handle) <- createProcess args
   hSetBuffering stdin LineBuffering
   hSetBuffering stdout NoBuffering
   hSetBuffering stderr LineBuffering
   let session = GHCISession stdin stdout stderr handle
-  runGHCI session readUntilPrompt
+  readUntilPrompt stdout
+  runGHCI session $ do
+    runImport "Prelude ()"
   return session
 
 stopGHCI :: GHCISession -> IO ExitCode
@@ -203,7 +221,7 @@ stopGHCI (GHCISession stdin stdout stderr handle) = do
   try $ hClose stderr :: IO (Either IOError ())
   waitForProcess handle
 
-withGHCI :: GHCI a -> IO a
+withGHCI :: GHCI a -> IO (Either [ErrorMessage] a)
 withGHCI action = do
   bracket startGHCI stopGHCI (getGHCI action)
 
@@ -212,12 +230,11 @@ proc' :: FilePath -> [String] -> CreateProcess
 proc' = proc
 
 newtype StmtResult = StmtResult { getStmtResult :: String }
-
 instance GHCIResult StmtResult where
   readGHCI = StmtResult
 
-runStmt :: String -> GHCI (Either [ErrorMessage] String)
-runStmt stmt = runGHCICommand stmt >>= return . fmap getStmtResult
+runStmt :: String -> GHCI String
+runStmt stmt = runGHCICommand stmt >>= return . getStmtResult
 
 newtype TypeResult = TypeResult { getTypeResult :: String }
 instance GHCIResult TypeResult where
@@ -229,12 +246,11 @@ instance GHCIResult TypeResult where
       parseType [] = error "Missing type"
       parseType (x:xs) = parseType xs
 
-runType :: String -> GHCI (Either [ErrorMessage] String)
-runType expr = runGHCICommand (":t " ++ expr) >>= return . fmap getTypeResult
+runType :: String -> GHCI String
+runType expr = runGHCICommand (":t " ++ expr) >>= return . getTypeResult
 
-newtype EmptyResult = EmptyResult { getEmptyResult :: () }
-instance GHCIResult EmptyResult where
-  readGHCI = const (EmptyResult ())
+runAddBreakpoint :: String -> GHCI ()
+runAddBreakpoint expr = runGHCICommand (":break " ++ expr) >>= return . getEmptyResult
 
-runAddBreakpoint :: String -> GHCI (Either [ErrorMessage] ())
-runAddBreakpoint expr = runGHCICommand (":break " ++ expr) >>= return . fmap getEmptyResult
+runImport :: String -> GHCI ()
+runImport imp = runGHCICommand ("import " ++ imp) >>= return . getEmptyResult
