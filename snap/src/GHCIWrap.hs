@@ -12,8 +12,8 @@ module GHCIWrap(GHCISession,
                 runAddBreakpoint) where
 
 import System.Process
+import System.Exit
 import System.IO
-import System.Posix.IO
 import Data.Char
 import Text.Regex
 
@@ -137,7 +137,7 @@ hReadUntil handle set = do
           then return [c]
           else do
           next <- loop
-          return c : next
+          return $ c : next
   loop
 
 readUntilPrompt :: GHCI String
@@ -146,12 +146,12 @@ readUntilPrompt = GHCI $ \(GHCISession _ stdout _ _) -> do
   let readLoop :: IO String
       readLoop = do
         let promptRegex = mkRegex "^[ A-Za-z0-9*]+>"
-        line <- hReadUntil "\n>" stdout
+        line <- hReadUntil stdout "\n>"
         putStrLn $ "Read stdout: " ++ line
         case matchRegex promptRegex line of
           Nothing -> do
             rest <- readLoop
-            return $ line ++ '\n' : rest
+            return $ line ++ rest
           Just _ -> return [] -- and eat the prompt
   readLoop
 
@@ -194,7 +194,7 @@ startGHCI = do
   runGHCI session readUntilPrompt
   return session
 
-stopGHCI :: GHCISession -> IO ()
+stopGHCI :: GHCISession -> IO ExitCode
 stopGHCI (GHCISession stdin stdout stderr handle) = do
   putStrLn "done"
   try $ hPutStrLn stdin ":q" :: IO (Either IOError ())
@@ -208,6 +208,7 @@ withGHCI action = do
   bracket startGHCI stopGHCI (getGHCI action)
 
 -- emacs indenter gets confused by proc for some reason
+proc' :: FilePath -> [String] -> CreateProcess
 proc' = proc
 
 newtype StmtResult = StmtResult { getStmtResult :: String }
@@ -224,14 +225,14 @@ instance GHCIResult TypeResult where
     where
       -- this parser is kind of dumb and would get confused by something like
       -- "::" :: [Char]
-      parseType ':':':':tp = dropWhile (isSpace) tp
+      parseType (':':':':tp) = dropWhile (isSpace) tp
       parseType [] = error "Missing type"
-      parseType x:xs = parseType xs
+      parseType (x:xs) = parseType xs
 
 runType :: String -> GHCI (Either [ErrorMessage] String)
 runType expr = runGHCICommand (":t " ++ expr) >>= return . fmap getTypeResult
 
-newtype EmptyResult = EmptyResult { getEmpty :: () }
+newtype EmptyResult = EmptyResult { getEmptyResult :: () }
 instance GHCIResult EmptyResult where
   readGHCI = const (EmptyResult ())
 
