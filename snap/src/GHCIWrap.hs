@@ -202,4 +202,12 @@ extractBreakpoints path = do
     contents <- hGetContents handle
     return $! extractDecls contents path
 
-runStmtWithTracing = undefined
+ioToGHCI :: IO (Either [ErrorMessage] a) -> GHCI a
+ioToGHCI = GHCI . const
+
+runStmtWithTracing :: FilePath -> String -> GHCI (Map String String)
+runStmtWithTracing filePath stmt = do
+  runDeleteStar
+  breakpoints <- ioToGHCI $ extractBreakpoints filePath
+  forM (S.toList breakpoints) runAddBreakpoint
+  return M.empty

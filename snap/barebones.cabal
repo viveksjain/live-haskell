@@ -25,7 +25,7 @@ library
 Executable barebones
   hs-source-dirs: src
   main-is: Main.hs
-  other-modules: GHCIWrap
+  other-modules: GHCIWrap, ErrorParser, HsParser
 
   build-depends:
     base                      >= 4     && < 5,
