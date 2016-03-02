@@ -1,11 +1,26 @@
--- "transactional IO"
+{-# LANGUAGE Trustworthy #-}
 
--- FIXME export list
-module System.TIO where
+module System.TIO(TIO,
+                  runTIO,
+                  openFile,
+                  hClose,
+                  withFile,
+                  readFile,
+                  writeFile,
+                  appendFile,
+                  hGetContents,
+                  hPutStr,
+                  hFileSize,
+                  hSetFileSize,
+                  hIsEOF) where
+
+import Prelude hiding (readFile, writeFile, appendFile)
 
 import Control.Applicative
 import Control.Monad
 import Control.Exception
+
+import System.TIO.Internal
 
 import System.FilePath((</>))
 import System.IO(FilePath, IOMode(..))
@@ -19,6 +34,9 @@ import Foreign.ForeignPtr(mallocForeignPtrBytes,withForeignPtr)
 
 import qualified System.IO as S
 
+runTIO :: TIO a -> IO a
+runTIO = unsafeRunTIO
+
 sandboxPath :: FilePath
 sandboxPath = unsafePerformIO $ do
   dir <- getWorkingDirectory
@@ -27,40 +45,33 @@ sandboxPath = unsafePerformIO $ do
   try (createDirectory path 0600) :: IO (Either SomeException ())
   return path
 
-data TIO a = TIO { runTIO :: IO a }
-
-instance Functor TIO where
-  fmap = liftM
-
-instance Applicative TIO where
-  pure = return
-  (<*>) = ap
-
-instance Monad TIO where
-  return = TIO . return
-  m >>= f = TIO $ runTIO m >>= (runTIO . f)
-
--- intentionally no instance of MonadIO here, or we
--- would run IO actions not transactionally
-
 data Handle = Handle !FilePath !S.Handle deriving (Eq, Show)
 
 copyFile :: FilePath -> FilePath -> IO ()
 copyFile from to = do
   buffer <- mallocForeignPtrBytes 8192 -- two memory blocks
-  bracket (S.openBinaryFile from ReadMode) S.hClose $ \fromH -> do
-    bracket (S.openBinaryFile to WriteMode) S.hClose $ \toH -> do
-      let loop = withForeignPtr buffer $ \buffer -> do
-            read <- S.hGetBuf fromH buffer 8192
-            if read > 0
-              then S.hPutBuf toH buffer read >> loop
-              else return ()
-      loop
+  let closeReadFile file = case file of
+        Left error -> return ()
+        Right handle -> S.hClose handle
+      readAction :: IO (Either IOError S.Handle)
+      readAction = try $ S.openBinaryFile from ReadMode
+  bracket readAction closeReadFile $ \fromFile -> do
+    case fromFile of
+      Left error -> return ()
+      Right fromH -> do
+        bracket (S.openBinaryFile to WriteMode) S.hClose $ \toH -> do
+          let loop = withForeignPtr buffer $ \buffer -> do
+                read <- S.hGetBuf fromH buffer 8192
+                if read > 0
+                  then S.hPutBuf toH buffer read >> loop
+                  else return ()
+          loop
 
 
 openFile :: FilePath -> IOMode -> TIO Handle
 openFile path mode = TIO $ do
   let insandbox = sandboxPath </> path
+  putStrLn $ "insandbox path " ++ insandbox
   exist <- fileExist insandbox
   when (not exist) (copyFile path insandbox)
   handle <- S.openFile insandbox mode

@@ -10,12 +10,17 @@ module GHCIWrap(GHCISession,
                 runStmt,
                 runType,
                 runImport,
-                runAddBreakpoint) where
+                runAddBreakpoint,
+                runLoad,
+                runDeleteStar,
+                extractBreakpoints,
+                runStmtWithTracing) where
 
 import System.Process
 import System.Exit
 import System.IO
 import Data.Char
+import Data.Maybe
 import Text.Regex
 
 import Control.Applicative
@@ -23,83 +28,13 @@ import Control.Monad
 import Control.Exception
 import Control.Monad.IO.Class
 
-data ErrorMessage = ErrorMessage FilePath Int Int String deriving (Eq, Ord, Read, Show)
+import Data.Map.Strict(Map)
+import qualified Data.Map.Strict as M
+import Data.Set(Set)
+import qualified Data.Set as S
 
-newtype ErrorParser a = ErrorParser { runErrorParser :: String -> Maybe (a, String) }
-
-instance Monad ErrorParser where
-  return x = ErrorParser $ \s -> Just (x, s)
-  m >>= f = ErrorParser $ \s ->
-    case runErrorParser m s of
-      Nothing -> Nothing
-      Just (v, s') -> runErrorParser (f v) s'
-  fail _ = ErrorParser $ const Nothing
-
-instance Applicative ErrorParser where
-  pure = return
-  (<*>) = ap
-
-instance Functor ErrorParser where
-  fmap = liftM
-
-expectChar :: Char -> ErrorParser ()
-expectChar c = ErrorParser $ \s -> case s of
-  (x:xs) | x == c -> Just ((), xs)
-  _ -> Nothing
-
-eatWhitespace :: ErrorParser ()
-eatWhitespace = ErrorParser $ \s -> case s of
-  [] -> Just ((), [])
-  (x:xs) | isSpace x -> runErrorParser eatWhitespace xs
-         | otherwise -> Just ((), xs)
-
-eatUntil :: Char -> ErrorParser String
-eatUntil c = ErrorParser $ \s -> case s of
-  [] -> Just ([], [])
-  (x:xs) | x == c -> Just ([], xs)
-         | otherwise -> case runErrorParser (eatUntil c) xs of
-    Nothing -> Nothing
-    Just (v, xs) -> Just (x : v, xs)
-
-peekNextChar :: ErrorParser (Maybe Char)
-peekNextChar = ErrorParser $ \s -> case s of
-  [] -> Just (Nothing, [])
-  (x:xs) -> Just (Just x, x:xs)
-
-parseOneError :: ErrorParser ErrorMessage
-parseOneError = do
-  filename <- eatUntil ':'
-  line <- fmap read (eatUntil ':')
-  col <- fmap read (eatUntil ':')
-  msg1 <- eatUntil '\n'
-  let readLoop = do
-        mc <- peekNextChar
-        case mc of
-          Nothing -> return []
-          Just c | isSpace c -> do
-            msg <- eatUntil '\n'
-            rest <- readLoop
-            return $ msg ++ '\n' : rest
-          _ -> return []
-  msgrest <- readLoop
-  let fullmsg = msg1 ++ '\n' : msgrest
-  return $ ErrorMessage filename line col fullmsg
-
-parseAllErrors :: ErrorParser [ErrorMessage]
-parseAllErrors = do
-  eatWhitespace
-  mc <- peekNextChar
-  case mc of
-    Nothing -> return []
-    Just _ -> do
-      err <- parseOneError
-      rest <- parseAllErrors
-      return $ err : rest
-
-parseErrors :: String -> [ErrorMessage]
-parseErrors s = case runErrorParser parseAllErrors s of
-  Nothing -> []
-  Just (errors, _) -> errors
+import ErrorParser(parseErrors, ErrorMessage(..))
+import HsParser(extractDecls)
 
 data GHCISession = GHCISession !Handle !Handle !Handle !ProcessHandle
 
@@ -199,9 +134,9 @@ runGHCICommand_ cmd = do
 
 startGHCI :: IO GHCISession
 startGHCI = do
-  let args = (proc' "/usr/bin/ghci" ["ghci"]) { std_in = CreatePipe,
-                                                std_out = CreatePipe,
-                                                std_err = CreatePipe }
+  let args = (proc' "/usr/bin/stack" ["stack", "exec", "ghci"]) { std_in = CreatePipe,
+                                                                  std_out = CreatePipe,
+                                                                  std_err = CreatePipe }
   (Just stdin, Just stdout, Just stderr, handle) <- createProcess args
   hSetBuffering stdin LineBuffering
   hSetBuffering stdout NoBuffering
@@ -254,3 +189,17 @@ runAddBreakpoint expr = runGHCICommand (":break " ++ expr) >>= return . getEmpty
 
 runImport :: String -> GHCI ()
 runImport imp = runGHCICommand ("import " ++ imp) >>= return . getEmptyResult
+
+runLoad :: String -> GHCI ()
+runLoad file = runGHCICommand (":l " ++ file) >>= return . getEmptyResult
+
+runDeleteStar :: GHCI ()
+runDeleteStar = runGHCICommand ":delete *" >>= return . getEmptyResult
+
+extractBreakpoints :: FilePath -> IO (Either [ErrorMessage] (Set String))
+extractBreakpoints path = do
+  withFile path ReadMode $ \handle -> do
+    contents <- hGetContents handle
+    return $! extractDecls contents path
+
+runStmtWithTracing = undefined
