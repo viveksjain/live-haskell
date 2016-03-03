@@ -14,7 +14,8 @@ module GHCIWrap(GHCISession,
                 runLoad,
                 runDeleteStar,
                 extractBreakpoints,
-                runStmtWithTracing) where
+                runStmtWithTracing,
+                TracingStep(..)) where
 
 import System.Process
 import System.Exit
@@ -27,6 +28,8 @@ import Control.Applicative
 import Control.Monad
 import Control.Exception
 import Control.Monad.IO.Class
+import Control.Monad.Trans.Writer.Strict
+import Control.Monad.Trans.Class
 
 import Data.Map.Strict(Map)
 import qualified Data.Map.Strict as M
@@ -35,6 +38,7 @@ import qualified Data.Set as S
 
 import ErrorParser(parseErrors, ErrorMessage(..))
 import HsParser(extractDecls)
+import MiniHsParser(runMiniParser, parseTracingLine)
 
 data GHCISession = GHCISession !Handle !Handle !Handle !ProcessHandle
 
@@ -69,6 +73,7 @@ class GHCIResult a where
 sendGHCI :: String -> GHCI ()
 sendGHCI what = GHCI $ \(GHCISession stdin _ _ _) -> do
   hPutStrLn stdin what
+  putStrLn $ "Write stdin: " ++ what
   return (Right ())
 
 hReadUntil :: Handle -> String -> IO String
@@ -111,12 +116,20 @@ readErrors stderr = do
           else return []
   readLoop
 
-receiveGHCI :: GHCIResult a => GHCI a
-receiveGHCI = GHCI $ \(GHCISession _ stdout stderr _) -> do
+flushErrors :: GHCI ()
+flushErrors = GHCI $ \(GHCISession _ _ stderr _) -> do
+  readErrors stderr
+  return $ Right ()
+
+receiveGHCIRaw :: GHCI String
+receiveGHCIRaw = GHCI $ \(GHCISession _ stdout stderr _) -> do
   result <- readUntilPrompt stdout
   if null result
     then readErrors stderr >>= return . Left . parseErrors
-    else return $ Right $ readGHCI result
+    else return $ Right $ result
+
+receiveGHCI :: GHCIResult a => GHCI a
+receiveGHCI = fmap readGHCI receiveGHCIRaw
 
 newtype EmptyResult = EmptyResult { getEmptyResult :: () }
 instance GHCIResult EmptyResult where
@@ -126,6 +139,11 @@ runGHCICommand :: GHCIResult a => String -> GHCI a
 runGHCICommand cmd = do
   sendGHCI cmd
   receiveGHCI
+
+runGHCICommandRaw :: String -> GHCI String
+runGHCICommandRaw cmd = do
+  sendGHCI cmd
+  receiveGHCIRaw
 
 runGHCICommand_ :: String -> GHCI ()
 runGHCICommand_ cmd = do
@@ -205,9 +223,64 @@ extractBreakpoints path = do
 ioToGHCI :: IO (Either [ErrorMessage] a) -> GHCI a
 ioToGHCI = GHCI . const
 
-runStmtWithTracing :: FilePath -> String -> GHCI (Map String String)
+startsWith :: String -> String -> Bool
+startsWith _ [] = True
+startsWith [] _ = False
+startsWith (x:xs) (y:ys) | x == y = startsWith xs ys
+startsWith _ _ = False
+
+data TracingStep = TS { getPosition :: (FilePath, Int), getVars :: Map String String }
+data TracingResult = Stopped !TracingStep | Done !String
+
+parseTracingStep :: String -> TracingResult
+parseTracingStep step | not (startsWith step "Stopped at ") = Done step
+parseTracingStep step = Stopped $
+  let
+    stopped = head $ lines step
+    vars = tail $ lines step
+  in TS (parseStopped stopped) (M.fromList $ map parseOneResult vars)
+  where
+    parseStopped :: String -> (FilePath, Int)
+    parseStopped line =
+      let after = drop (length "Stopped at ") line
+          (filename, rest) = break (/= ':') after
+          (lineNo, _) = break (/= ':') $ tail rest
+      in (filename, read lineNo)
+    parseOneResult :: String -> (String, String)
+    parseOneResult line =
+      case runMiniParser parseTracingLine line of
+        Just (name, value) -> (name, value)
+        Nothing -> ("*failed to parse*", "")
+
+type ListOutput a b = WriterT [a] GHCI b
+
+data TracingState = Init | AtBreakpoint | AfterStep | AfterForce
+
+runStmtWithTracing :: FilePath -> String -> GHCI ([TracingStep], String)
 runStmtWithTracing filePath stmt = do
   runDeleteStar
   breakpoints <- ioToGHCI $ extractBreakpoints filePath
   forM (S.toList breakpoints) runAddBreakpoint
-  return M.empty
+  let loop step = do
+        (nextStep, output) <- lift $ nextTracingCommand stmt step
+        case parseTracingStep output of
+          Done res -> return res
+          Stopped map -> do
+            tell [map]
+            loop nextStep
+  (res, map) <- runWriterT $ loop Init
+  return (map, res)
+  where
+    nextTracingCommand :: String -> TracingState -> GHCI (TracingState, String)
+    nextTracingCommand stmt Init = do
+      res <- runGHCICommandRaw stmt
+      return (AtBreakpoint, res)
+    nextTracingCommand _ AtBreakpoint = do
+      res <- runGHCICommandRaw ":step"
+      return (AfterStep, res)
+    nextTracingCommand _ AfterStep = do
+      res <- runGHCICommandRaw ":force _result"
+      return (AfterForce, res)
+    nextTracingCommand _ AfterForce = do
+      res <- runGHCICommandRaw ":cont"
+      return (AtBreakpoint, res)
