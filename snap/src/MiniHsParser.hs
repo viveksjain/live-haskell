@@ -39,7 +39,8 @@ expectChar c = MHP $ \s -> case s of
 expectNotChar :: String -> MiniHsParser ()
 expectNotChar c = MHP $ \s -> case s of
   (x:xs) | x `elem` c -> Nothing
-  v -> Just ((), v)
+  (_:xs) -> Just ((), xs)
+  [] -> Just ((), [])
 
 expectSpace :: MiniHsParser Char
 expectSpace = MHP $ \s -> case s of

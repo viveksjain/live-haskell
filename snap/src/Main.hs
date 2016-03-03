@@ -23,9 +23,10 @@ main :: IO ()
 main = bracket startGHCI stopGHCI $ \session -> do
   putStrLn "GHCI ready"
   runGHCI session $ do
-    runStmt "2 + 3" >>= liftIO . print
+    runLoad "test.hs"
+    runStmtWithTracing "test.hs" "main" >>= liftIO . print
   putStrLn "runGHCI ok"
-  quickHttpServe $ site session
+  --quickHttpServe $ site session
 
 site :: GHCISession -> Snap ()
 site session =

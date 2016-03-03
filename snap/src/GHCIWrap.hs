@@ -92,7 +92,10 @@ readUntilPrompt stdout = do
   hWaitForInput stdout (-1)
   let readLoop :: IO String
       readLoop = do
-        let promptRegex = mkRegex "^[ A-Za-z0-9*]+>"
+        -- this regex is incorrect
+        -- because the char class at the beginning should be [^\\]]
+        -- not [^]]
+        let promptRegex = mkRegex "^ ?(\\[[^]]+\\])?[ A-Za-z0-9*]+>"
         line <- hReadUntil stdout "\n>"
         putStrLn $ "Read stdout: " ++ line
         case matchRegex promptRegex line of
@@ -124,8 +127,9 @@ flushErrors = GHCI $ \(GHCISession _ _ stderr _) -> do
 receiveGHCIRaw :: GHCI String
 receiveGHCIRaw = GHCI $ \(GHCISession _ stdout stderr _) -> do
   result <- readUntilPrompt stdout
-  if null result
-    then readErrors stderr >>= return . Left . parseErrors
+  errors <- readErrors stderr
+  if not $ null errors
+    then return $ Left $ parseErrors errors
     else return $ Right $ result
 
 receiveGHCI :: GHCIResult a => GHCI a
@@ -152,15 +156,18 @@ runGHCICommand_ cmd = do
 
 startGHCI :: IO GHCISession
 startGHCI = do
-  let args = (proc' "/usr/bin/stack" ["stack", "exec", "ghci"]) { std_in = CreatePipe,
-                                                                  std_out = CreatePipe,
-                                                                  std_err = CreatePipe }
+  let args = (proc' "/usr/bin/stack" ["exec", "ghci"]) { std_in = CreatePipe,
+                                                         std_out = CreatePipe,
+                                                         std_err = CreatePipe }
   (Just stdin, Just stdout, Just stderr, handle) <- createProcess args
   hSetBuffering stdin LineBuffering
   hSetBuffering stdout NoBuffering
   hSetBuffering stderr LineBuffering
   let session = GHCISession stdin stdout stderr handle
+  putStrLn "GHCI started"
+  readErrors stderr
   readUntilPrompt stdout
+  putStrLn "Got GHCI prompt"
   runGHCI session $ do
     runImport "Prelude ()"
   return session
@@ -229,11 +236,13 @@ startsWith [] _ = False
 startsWith (x:xs) (y:ys) | x == y = startsWith xs ys
 startsWith _ _ = False
 
-data TracingStep = TS { getPosition :: (FilePath, Int), getVars :: Map String String }
-data TracingResult = Stopped !TracingStep | Done !String
+data TracingStep = TS { getPosition :: !(FilePath, Int), getVars :: !(Map String String) } deriving (Eq, Ord, Show, Read)
+data TracingResult = Stopped !TracingStep | Done !String deriving (Eq, Ord, Show, Read)
 
 parseTracingStep :: String -> TracingResult
-parseTracingStep step | not (startsWith step "Stopped at ") = Done step
+                                             -- note the space here: it's because we read until "Bla>",
+                                             -- but the prompt is "Bla> "
+parseTracingStep step | not (startsWith step " Stopped at ") = Done step
 parseTracingStep step = Stopped $
   let
     stopped = head $ lines step
@@ -242,9 +251,9 @@ parseTracingStep step = Stopped $
   where
     parseStopped :: String -> (FilePath, Int)
     parseStopped line =
-      let after = drop (length "Stopped at ") line
-          (filename, rest) = break (/= ':') after
-          (lineNo, _) = break (/= ':') $ tail rest
+      let after = drop (length " Stopped at ") line
+          (filename, rest) = break (== ':') after
+          (lineNo, _) = break (== ':') $ tail rest
       in (filename, read lineNo)
     parseOneResult :: String -> (String, String)
     parseOneResult line =
@@ -254,12 +263,13 @@ parseTracingStep step = Stopped $
 
 type ListOutput a b = WriterT [a] GHCI b
 
-data TracingState = Init | AtBreakpoint | AfterStep | AfterForce
+data TracingState = Init | AtBreakpoint | AfterStep | AfterForce deriving (Eq, Ord, Show, Read, Enum)
 
 runStmtWithTracing :: FilePath -> String -> GHCI ([TracingStep], String)
 runStmtWithTracing filePath stmt = do
   runDeleteStar
   breakpoints <- ioToGHCI $ extractBreakpoints filePath
+  liftIO $ putStrLn $ "Breakpoints: " ++ show breakpoints
   forM (S.toList breakpoints) runAddBreakpoint
   let loop step = do
         (nextStep, output) <- lift $ nextTracingCommand stmt step
@@ -278,9 +288,9 @@ runStmtWithTracing filePath stmt = do
     nextTracingCommand _ AtBreakpoint = do
       res <- runGHCICommandRaw ":step"
       return (AfterStep, res)
+    --nextTracingCommand _ AfterStep = do
+    --  res <- runGHCICommandRaw ":force _result"
+    --  return (AfterForce, res)
     nextTracingCommand _ AfterStep = do
-      res <- runGHCICommandRaw ":force _result"
-      return (AfterForce, res)
-    nextTracingCommand _ AfterForce = do
       res <- runGHCICommandRaw ":cont"
       return (AtBreakpoint, res)
