@@ -1,5 +1,8 @@
 $(document).ready(function () {
+  // These are purposely globals so they can be used anywhere, and to allow for
+  // easier debugging.
   editor = ace.edit('editor');
+  editor.$blockScrolling = Infinity;  // Hide Ace error messages
   editor.setTheme('ace/theme/monokai');
   editor.getSession().setMode('ace/mode/haskell');
   editor.commands.addCommand({
@@ -12,6 +15,7 @@ $(document).ready(function () {
   editor.session.setTabSize(2);
 
   output = ace.edit('output');
+  output.$blockScrolling = Infinity;  // Hide Ace error messages
   output.setOptions({
     readOnly: true,
     highlightActiveLine: false,
@@ -29,10 +33,21 @@ $(document).keyup(function (ev) {
 });
 
 function evaluateCode() {
-
   $.post('evaluate', {script: editor.getValue()}, function (result) {
     console.log(result);
-    console.log(typeof result);
     output.setValue(result.output || result.error, 1);
+
+    var errors = result.errors;
+    var aceErrors = [];
+    for (var k in errors) {
+      if (errors.hasOwnProperty(k)) {
+        aceErrors.push({
+          row: k - 1,  // 0 indexed
+          text: errors[k],
+          type: 'error',
+        });
+      }
+    }
+    editor.getSession().setAnnotations(aceErrors);
   });
 }
