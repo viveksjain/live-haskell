@@ -156,7 +156,7 @@ runGHCICommand_ cmd = do
 
 startGHCI :: IO GHCISession
 startGHCI = do
-  let args = (proc' "/usr/bin/stack" ["exec", "ghci"]) { std_in = CreatePipe,
+  let args = (proc' "stack" ["exec", "ghci"]) { std_in = CreatePipe,
                                                          std_out = CreatePipe,
                                                          std_err = CreatePipe }
   (Just stdin, Just stdout, Just stderr, handle) <- createProcess args

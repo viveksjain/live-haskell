@@ -30,7 +30,7 @@ main = bracket startGHCI stopGHCI $ \session -> do
 
 site :: GHCISession -> Snap ()
 site session =
-    route [ ("", serveDirectory "/home/neeral/Documents/cs240h/project/live-haskell/client")
+    route [ ("", serveDirectory "../client")
           , ("evaluate", method POST $ evalHandler session)
           , ("foo", writeBS "bar")
           , ("echo/:echoparam", echoHandler)
