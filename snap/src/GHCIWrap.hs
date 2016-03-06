@@ -263,7 +263,7 @@ parseTracingStep step = Stopped $
 
 type ListOutput a b = WriterT [a] GHCI b
 
-data TracingState = Init | AtBreakpoint | AfterStep | AfterForce deriving (Eq, Ord, Show, Read, Enum)
+data TracingCmd = Init | Step | ForceResult deriving (Eq, Ord, Show, Read, Enum)
 
 runStmtWithTracing :: FilePath -> String -> GHCI ([TracingStep], String)
 runStmtWithTracing filePath stmt = do
@@ -272,25 +272,23 @@ runStmtWithTracing filePath stmt = do
   liftIO $ putStrLn $ "Breakpoints: " ++ show breakpoints
   forM (S.toList breakpoints) runAddBreakpoint
   let loop step = do
-        (nextStep, output) <- lift $ nextTracingCommand stmt step
+        output <- lift $ nextTracingCommand stmt step
         case parseTracingStep output of
           Done res -> return res
           Stopped map -> do
             tell [map]
-            loop nextStep
+            loop $ nextTracingState map
   (res, map) <- runWriterT $ loop Init
   return (map, res)
   where
-    nextTracingCommand :: String -> TracingState -> GHCI (TracingState, String)
-    nextTracingCommand stmt Init = do
-      res <- runGHCICommandRaw stmt
-      return (AtBreakpoint, res)
-    nextTracingCommand _ AtBreakpoint = do
-      res <- runGHCICommandRaw ":step"
-      return (AfterStep, res)
-    --nextTracingCommand _ AfterStep = do
-    --  res <- runGHCICommandRaw ":force _result"
-    --  return (AfterForce, res)
-    nextTracingCommand _ AfterStep = do
-      res <- runGHCICommandRaw ":cont"
-      return (AtBreakpoint, res)
+    nextTracingCommand :: String -> TracingCmd -> GHCI String
+    nextTracingCommand stmt Init = runGHCICommandRaw stmt
+    nextTracingCommand _ Step = runGHCICommandRaw ":step"
+    nextTracingCommand _ ForceResult = runGHCICommandRaw ":force _result"
+
+    nextTracingState :: TracingStep -> TracingCmd
+    nextTracingState (TS (path, _) _) =
+      if path == filePath
+      then Step
+      else ForceResult
+
