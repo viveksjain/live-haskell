@@ -12,6 +12,7 @@ module GHCIWrap(GHCISession,
                 runImport,
                 runAddBreakpoint,
                 runLoad,
+                runReload,
                 runDeleteStar,
                 extractBreakpoints,
                 runStmtWithTracing,
@@ -218,6 +219,9 @@ runImport imp = runGHCICommand ("import " ++ imp) >>= return . getEmptyResult
 runLoad :: String -> GHCI ()
 runLoad file = runGHCICommand (":l " ++ file) >>= return . getEmptyResult
 
+runReload :: GHCI String
+runReload = runGHCICommand (":r") >>= return . getStmtResult
+
 runDeleteStar :: GHCI ()
 runDeleteStar = runGHCICommand ":delete *" >>= return . getEmptyResult
 
@@ -291,4 +295,3 @@ runStmtWithTracing filePath stmt = do
       if path == filePath
       then Step
       else ForceResult
-

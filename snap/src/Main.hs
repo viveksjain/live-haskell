@@ -26,7 +26,8 @@ main = bracket startGHCI stopGHCI $ \session -> do
     runLoad "test.hs"
     runStmtWithTracing "test.hs" "main" >>= liftIO . print
   putStrLn "runGHCI ok"
-  --quickHttpServe $ site session
+  runGHCI session $ runLoad "/tmp/test.hs"
+  quickHttpServe $ site session
 
 site :: GHCISession -> Snap ()
 site session =
@@ -53,8 +54,9 @@ evalHandler session = do
 
 run :: GHCISession -> ByteString -> IO EvalOutput
 run session script = do
+  BS.writeFile "/tmp/test.hs" script
   res <- runGHCI session $ do
-    runStmt (BC.unpack script)
+    runReload
   case res of
     Left errs -> return $ EvalOutput "" "" $ Map.fromListWith (++) $ map (\(ErrorMessage _ line _ msg) -> (line, msg)) errs
     Right result -> return $ EvalOutput result "" Map.empty
