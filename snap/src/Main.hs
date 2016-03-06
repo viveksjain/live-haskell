@@ -33,6 +33,7 @@ site :: GHCISession -> Snap ()
 site session =
     route [ ("", serveDirectory "../client")
           , ("evaluate", method POST $ evalHandler session)
+          , ("typecheck", method POST $ typeHandler session)
           , ("foo", writeBS "bar")
           , ("echo/:echoparam", echoHandler)
           ]
@@ -51,6 +52,23 @@ evalHandler session = do
     Just param -> do
       evalOutput <- liftIO $ run session param :: Snap EvalOutput
       writeJSON evalOutput
+
+typeHandler :: GHCISession -> Snap ()
+typeHandler session = do
+  param' <- getParam "expr"
+  case param' of
+    Nothing -> return ()
+    Just param -> do
+      evalOutput <- liftIO $ run session param :: Snap EvalOutput
+      writeJSON evalOutput
+
+runTyp :: GHCISession -> ByteString -> IO EvalOutput
+runTyp session expr = do
+  res <- runGHCI session $ do
+    runType . BC.unpack $ expr
+  case res of
+    Left errs -> return $ EvalOutput "" "" $ Map.fromListWith (++) $ map (\(ErrorMessage _ line _ msg) -> (line, msg)) errs
+    Right result -> return $ EvalOutput result "" Map.empty
 
 run :: GHCISession -> ByteString -> IO EvalOutput
 run session script = do
