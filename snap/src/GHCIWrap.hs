@@ -20,14 +20,13 @@ module GHCIWrap(GHCISession,
 
 import System.Process
 import System.Exit
-import System.IO
+import System.IO hiding (stdin, stdout, stderr)
 import Data.Char
-import Data.Maybe
 import Text.Regex
 
-import Control.Applicative
+-- import Control.Applicative
 import Control.Monad
-import Control.Exception
+import Control.Exception hiding (handle)
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Writer.Strict
 import Control.Monad.Trans.Class
@@ -57,6 +56,7 @@ instance Monad GHCI where
       -- pay attention that these two Left have different types
       -- one is Either [ErrorMessage] a, the other is Either [ErrorMessage] b
       Left errs -> return $ Left errs
+  fail e = GHCI $ \_ -> return $ Left [ErrorMessage "<unknown>" 1 1 e]
 
 instance MonadIO GHCI where
   liftIO m = GHCI $ \_ -> m >>= return . Right
@@ -96,7 +96,7 @@ readUntilPrompt stdout = do
         -- this regex is incorrect
         -- because the char class at the beginning should be [^\\]]
         -- not [^]]
-        let promptRegex = mkRegex "^ ?(\\[[^]]+\\])?[ A-Za-z0-9*]+>"
+        let promptRegex = mkRegex "^ ?(\\[[^]]+\\])?[ A-Za-z0-9.*]*>"
         line <- hReadUntil stdout "\n>"
         putStrLn $ "Read stdout: " ++ line
         case matchRegex promptRegex line of
@@ -157,10 +157,11 @@ runGHCICommand_ cmd = do
 
 startGHCI :: IO GHCISession
 startGHCI = do
-  let args = (proc' "stack" ["exec", "ghci-ng"]) { std_in = CreatePipe,
-                                                         std_out = CreatePipe,
-                                                         std_err = CreatePipe }
-  (Just stdin, Just stdout, Just stderr, handle) <- createProcess args
+  let args = ["exec", "ghci-ng", "--", "-XSafe", "-XNoImplicitPrelude"]
+      process = (proc' "stack" args) { std_in = CreatePipe,
+                                       std_out = CreatePipe,
+                                       std_err = CreatePipe }
+  (Just stdin, Just stdout, Just stderr, handle) <- createProcess process
   hSetBuffering stdin LineBuffering
   hSetBuffering stdout NoBuffering
   hSetBuffering stderr LineBuffering
@@ -170,8 +171,13 @@ startGHCI = do
   readUntilPrompt stdout
   putStrLn "Got GHCI prompt"
   runGHCI session $ do
-    runImport "Prelude ()"
-    runStmt ":set +c"
+    runGHCICommand_ ":set +c" -- XXX: what's this?
+    runGHCICommand_ ":set -iprelude"
+    runGHCICommand_ ":l prelude/Prelude.hs"
+    runGHCICommand_ ":l prelude/System/IO.hs"
+    runGHCICommand_ ":l prelude/Data/IORef.hs"
+    runGHCICommand_ ":l prelude/Data/Array/IO.hs"
+    runGHCICommand_ ":set -XImplicitPrelude"
   return session
 
 stopGHCI :: GHCISession -> IO ExitCode
@@ -195,36 +201,69 @@ newtype StmtResult = StmtResult { getStmtResult :: String }
 instance GHCIResult StmtResult where
   readGHCI = StmtResult
 
+data ExecStyle = PureFunction | TIO | Reject
+
+prepareToRunStmt :: String -> GHCI ExecStyle
+prepareToRunStmt stmt = do
+  runGHCICommand_ $ "let it = (" ++ stmt ++ ")"
+  type_ <- runType "it"
+  return $ case extractMainType type_ of
+    mainType | startsWith mainType "TIO" -> TIO
+             | startsWith mainType "IO" -> Reject
+             | startsWith mainType "GHC.Types.IO" -> Reject
+             | otherwise -> PureFunction
+
+runWithStyle :: ExecStyle -> GHCI String
+runWithStyle PureFunction = runGHCICommand "print it" >>= return . getStmtResult
+runWithStyle TIO = runGHCICommand "runTIO it" >>= return . getStmtResult
+runWithStyle Reject = fail "Unsandboxed IO action is not allowed"
+
 runStmt :: String -> GHCI String
-runStmt stmt = runGHCICommand stmt >>= return . getStmtResult
+runStmt stmt = prepareToRunStmt stmt >>= runWithStyle
+
+parseType :: String -> String
+parseType = go 0
+  where
+    go :: Int -> String -> String
+    go lvl what = case lex what of
+      [("", _)] -> undefined
+      [("(", rest)] -> go (lvl+1) rest
+      [(")", rest)] | lvl > 0 -> go (lvl-1) rest
+                    | otherwise -> undefined
+      [("::", rest)] | lvl == 0 -> dropWhile isSpace rest
+      [(_, rest)] -> go lvl rest
+      _ -> undefined
+
+extractMainType :: String -> String
+extractMainType from = case dropConstraint from of
+  Just afterConstraint -> afterConstraint
+  Nothing -> from
+  where
+    dropConstraint [] = Nothing
+    dropConstraint ('=':'>':xs) = Just $ dropWhile isSpace xs
+    dropConstraint (x:xs) = dropConstraint xs
 
 newtype TypeResult = TypeResult { getTypeResult :: String }
 instance GHCIResult TypeResult where
   readGHCI = TypeResult . parseType
-    where
-      -- this parser is kind of dumb and would get confused by something like
-      -- "::" :: [Char]
-      parseType (':':':':tp) = dropWhile (isSpace) tp
-      parseType [] = error "Missing type"
-      parseType (x:xs) = parseType xs
 
 runType :: String -> GHCI String
 runType expr = runGHCICommand (":t " ++ expr) >>= return . getTypeResult
 
 runAddBreakpoint :: String -> GHCI ()
-runAddBreakpoint expr = runGHCICommand (":break " ++ expr) >>= return . getEmptyResult
+runAddBreakpoint expr = runGHCICommand_ (":break " ++ expr)
 
 runImport :: String -> GHCI ()
-runImport imp = runGHCICommand ("import " ++ imp) >>= return . getEmptyResult
+runImport imp = runGHCICommand_ ("import " ++ imp)
 
 runLoad :: String -> GHCI ()
-runLoad file = runGHCICommand (":l " ++ file) >>= return . getEmptyResult
+runLoad file = runGHCICommand_ (":l " ++ file)
 
 runReload :: GHCI String
 runReload = runGHCICommand (":r") >>= return . getStmtResult
 
 runDeleteStar :: GHCI ()
-runDeleteStar = runGHCICommand ":delete *" >>= return . getEmptyResult
+runDeleteStar = runGHCICommand_ ":delete *"
 
 extractBreakpoints :: FilePath -> IO (Either [ErrorMessage] (Set String))
 extractBreakpoints path = do
@@ -259,7 +298,15 @@ parseTracingStep step = Stopped $
       let after = drop (length " Stopped at ") line
           (filename, rest) = break (== ':') after
           (lineNo, _) = break (== ':') $ tail rest
-      in (filename, read lineNo)
+      in case lineNo of
+        '(':xs -> let (actualLineNo, _) = break (== ',') xs
+                  in (filename, parse xs)
+        x -> (filename, parse x)
+    -- a version of read with sensible error messages
+    parse :: Read a => String -> a
+    parse what = case reads what of
+      [(x, _)] -> x
+      _ -> error $ "cannot parse " ++ what
     parseOneResult :: String -> (String, String)
     parseOneResult line =
       case runMiniParser parseTracingLine line of
@@ -287,7 +334,7 @@ runStmtWithTracing filePath stmt = do
   return (map, res)
   where
     nextTracingCommand :: String -> TracingCmd -> GHCI String
-    nextTracingCommand stmt Init = runGHCICommandRaw stmt
+    nextTracingCommand stmt Init = runStmt stmt
     nextTracingCommand _ Step = runGHCICommandRaw ":step"
     nextTracingCommand _ ForceResult = runGHCICommandRaw ":force _result"
 

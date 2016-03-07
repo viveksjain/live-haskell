@@ -25,7 +25,7 @@ main = bracket startGHCI stopGHCI $ \session -> do
   putStrLn "GHCI ready"
   runGHCI session $ do
     runLoad "test.hs"
-    runStmtWithTracing "test.hs" "main" >>= liftIO . print
+    runStmtWithTracing "test.hs" "main'" >>= liftIO . print
   putStrLn "runGHCI ok"
   runGHCI session $ runLoad "/tmp/test.hs"
   quickHttpServe $ site session

@@ -11,9 +11,9 @@ Build-type:          Simple
 Cabal-version:       >=1.2
 
 library
-  hs-source-dirs:      src
-  exposed-modules:     SafePrelude
-  other-modules:       System.TIO, System.TIO.Internal, Data.TIOArray, Data.TIORef
+  hs-source-dirs:      lib
+  exposed-modules:     SafePrelude, System.TIO, Data.TIOArray, Data.TIORef
+  other-modules:       System.TIO.Internal
   build-depends:       base >= 4.7 && < 5 ,
                        filepath ,
                        transformers ,
