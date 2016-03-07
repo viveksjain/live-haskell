@@ -12,6 +12,7 @@ import Data.Aeson
 import Data.ByteString(ByteString)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BC
+import qualified Data.List as List (intersperse)
 import Data.Map.Strict(Map)
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as Text (pack)
@@ -33,7 +34,8 @@ site :: GHCISession -> Snap ()
 site session =
     route [ ("", serveDirectory "../client")
           , ("evaluate", method POST $ evalHandler session)
-          , ("typecheck", method POST $ typeHandler session)
+          , ("type-at", method POST $ typeAtHandler session)
+          -- , ("type-at/:line_start/:col_start/:line_end/:col_end/:text",  typeAtHandler session) -- for testing without the UI
           , ("foo", writeBS "bar")
           , ("echo/:echoparam", echoHandler)
           ]
@@ -53,19 +55,26 @@ evalHandler session = do
       evalOutput <- liftIO $ run session param :: Snap EvalOutput
       writeJSON evalOutput
 
-typeHandler :: GHCISession -> Snap ()
-typeHandler session = do
-  param' <- getParam "expr"
-  case param' of
-    Nothing -> return ()
-    Just param -> do
-      evalOutput <- liftIO $ run session param :: Snap EvalOutput
+typeAtHandler :: GHCISession -> Snap ()
+typeAtHandler session = do
+  line_start' <- getParam "line_start"
+  col_start'  <- getParam "col_start"
+  line_end'   <- getParam "line_end"
+  col_end'    <- getParam "col_end"
+  text'       <- getParam "text"
+  case (line_start', col_start', line_end', col_end', text') of
+    (Just line_start, Just col_start, Just line_end, Just col_end, Just text) -> do
+      evalOutput <- liftIO $ runTypeAt session line_start col_start line_end col_end text :: Snap EvalOutput
       writeJSON evalOutput
+    _ -> return ()
 
-runTyp :: GHCISession -> ByteString -> IO EvalOutput
-runTyp session expr = do
+-- runTypeAt <GHCISession> <line> <col> <end-line> <end-col> <text>
+runTypeAt :: GHCISession -> ByteString -> ByteString -> ByteString -> ByteString -> ByteString -> IO EvalOutput
+runTypeAt session line_start col_start line_end col_end text = do
   res <- runGHCI session $ do
-    runType . BC.unpack $ expr
+    let x = map BC.unpack [line_start, col_start, line_end, col_end, text] :: [String]
+    let y = foldr (++) "" . List.intersperse " " $ x :: String
+    runStmt $ ":type-at /tmp/test.hs " ++ y
   case res of
     Left errs -> return $ EvalOutput "" "" $ Map.fromListWith (++) $ map (\(ErrorMessage _ line _ msg) -> (line, msg)) errs
     Right result -> return $ EvalOutput result "" Map.empty

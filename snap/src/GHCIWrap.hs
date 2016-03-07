@@ -157,7 +157,7 @@ runGHCICommand_ cmd = do
 
 startGHCI :: IO GHCISession
 startGHCI = do
-  let args = (proc' "stack" ["exec", "ghci"]) { std_in = CreatePipe,
+  let args = (proc' "stack" ["exec", "ghci-ng"]) { std_in = CreatePipe,
                                                          std_out = CreatePipe,
                                                          std_err = CreatePipe }
   (Just stdin, Just stdout, Just stderr, handle) <- createProcess args
@@ -171,6 +171,7 @@ startGHCI = do
   putStrLn "Got GHCI prompt"
   runGHCI session $ do
     runImport "Prelude ()"
+    runStmt ":set +c"
   return session
 
 stopGHCI :: GHCISession -> IO ExitCode
