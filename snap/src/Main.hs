@@ -36,6 +36,7 @@ site session =
           , ("evaluate", method POST $ evalHandler session)
           , ("type-at", method POST $ typeAtHandler session)
           -- , ("type-at/:line_start/:col_start/:line_end/:col_end/:text",  typeAtHandler session) -- for testing without the UI
+          , ("command", method POST $ commandHandler session)
           , ("foo", writeBS "bar")
           , ("echo/:echoparam", echoHandler)
           ]
@@ -54,6 +55,17 @@ evalHandler session = do
     Just param -> do
       evalOutput <- liftIO $ run session param :: Snap EvalOutput
       writeJSON evalOutput
+
+commandHandler :: GHCISession -> Snap ()
+commandHandler session = do
+  stmtResult <- liftIO $ runGHCI session $ runStmt "main"
+  evalOutput <- return . decodeResult $ stmtResult
+  writeJSON evalOutput
+
+decodeResult :: Either [ErrorMessage] String -> EvalOutput
+decodeResult res = case res of
+  Left errs     -> EvalOutput "" "" $ Map.fromListWith (++) $ map (\(ErrorMessage _ line _ msg) -> (line, msg)) errs
+  Right result  -> EvalOutput result "" Map.empty
 
 typeAtHandler :: GHCISession -> Snap ()
 typeAtHandler session = do
@@ -75,18 +87,14 @@ runTypeAt session line_start col_start line_end col_end text = do
     let x = map BC.unpack [line_start, col_start, line_end, col_end, text] :: [String]
     let y = foldr (++) "" . List.intersperse " " $ x :: String
     runStmt $ ":type-at /tmp/test.hs " ++ y
-  case res of
-    Left errs -> return $ EvalOutput "" "" $ Map.fromListWith (++) $ map (\(ErrorMessage _ line _ msg) -> (line, msg)) errs
-    Right result -> return $ EvalOutput result "" Map.empty
+  return . decodeResult $ res
 
 run :: GHCISession -> ByteString -> IO EvalOutput
 run session script = do
   BS.writeFile "/tmp/test.hs" script
   res <- runGHCI session $ do
     runReload
-  case res of
-    Left errs -> return $ EvalOutput "" "" $ Map.fromListWith (++) $ map (\(ErrorMessage _ line _ msg) -> (line, msg)) errs
-    Right result -> return $ EvalOutput result "" Map.empty
+  return . decodeResult $ res
 
 data EvalOutput = EvalOutput {
   output :: String,         -- from std_out
