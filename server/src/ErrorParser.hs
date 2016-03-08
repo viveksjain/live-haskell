@@ -54,17 +54,19 @@ parseOneError = do
   line <- fmap read (eatUntil ':')
   col <- fmap read (eatUntil ':')
   msg1 <- eatUntil '\n'
+  let msg1' = dropWhile isSpace msg1
   let readLoop = do
         mc <- peekNextChar
         case mc of
           Nothing -> return []
           Just c | isSpace c -> do
             msg <- eatUntil '\n'
+            let msg' = dropWhile isSpace msg
             rest <- readLoop
-            return $ msg ++ '\n' : rest
+            return $ msg' ++ '\n' : rest
           _ -> return []
   msgrest <- readLoop
-  let fullmsg = msg1 ++ '\n' : msgrest
+  let fullmsg = dropWhile isSpace $ msg1' ++ '\n' : msgrest
   return $ ErrorMessage filename line col fullmsg
 
 parseAllErrors :: ErrorParser [ErrorMessage]
