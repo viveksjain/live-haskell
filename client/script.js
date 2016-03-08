@@ -80,11 +80,19 @@ LiveHaskell.prototype.enable = function(file_selector) {
     file_selector.hide();
     $('#live_haskell').show();
     var that = this;
+    var debounced = debounce(function() {
+      that.evaluateInput();
+    }, 300, {
+      leading: true,
+      trailing: true,
+    });
     // Evaluate on enter inside editor. Needs to be keyup so we get updated
     // input text.
     $('#editor').keyup(function(ev) {
       if (ev.which == 13 && !(ev.metaKey || ev.ctrlKey)) {
-        that.evaluateInput();
+        // Debounce enter key, but not Cmd-/Ctrl-Enter since the user is
+        // explicitly evaluating in the latter case.
+        debounced();
       }
     });
 
