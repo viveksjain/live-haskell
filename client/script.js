@@ -13,7 +13,7 @@ function FileSelector(live_haskell) {
     // TODO
     // $.post('open', {filename: $('#form_filename').val()}, function (result) {
     // });
-    var contents = "-- Type here and it will get evaluated when you press enter (careful, make sure\n-- you don't execute any potentially dangerous code!)\nmain :: IO ()\nmain = putStrLn \"Hello world\"";
+    var contents = "-- Type here and it will get evaluated when you press enter (careful, make sure\n-- you don't execute any potentially dangerous code!)\nmain' :: String\nmain' = \"Hello world\"";
     live_haskell.setInput(contents);
     live_haskell.enable(that);
   });
@@ -29,6 +29,14 @@ function LiveHaskell() {
   this._editor.setTheme('ace/theme/monokai');
   this._editor.getSession().setMode('ace/mode/haskell');
   this._editor.session.setTabSize(2);
+  var that = this;
+  this._editor.commands.addCommand({
+    name: 'getType',
+    bindKey: {win: 'Ctrl-Alt-T', mac: 'Command-Option-T'},
+    exec: function (editor) {
+      that.getType();
+    }
+  });
 
   this._output = ace.edit('output');
   this._output.$blockScrolling = Infinity;  // Hide Ace error message about this
@@ -91,5 +99,18 @@ LiveHaskell.prototype.evaluateInput = function() {
       }
     }
     that._editor.getSession().setAnnotations(aceErrors);
+  });
+}
+
+LiveHaskell.prototype.getType = function () {
+  var range = this._editor.getSelectionRange();  // Note: rows are 0 indexed
+  $.post('type-at', {
+    line_start: range.start.row + 1,
+    col_start: range.start.column,
+    line_end: range.end.row + 1,
+    col_end: range.end.column,
+    text: 'main\'',
+  }, function (result) {
+    console.log(result);
   });
 }
