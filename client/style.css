@@ -80,10 +80,10 @@ body .ace {
 
 .type-tooltip * {
   // Needs overriding since qtip is inside .ace_scroller which doesn't allow selections
-  user-select: text;
   -webkit-user-select: text;
   -moz-user-select: text;
   -ms-user-select: text;
+  user-select: text;
 }
 
 #editor .type-tooltip {
