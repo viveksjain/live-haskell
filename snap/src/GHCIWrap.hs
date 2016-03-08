@@ -7,8 +7,10 @@ module GHCIWrap(GHCISession,
                 stopGHCI,
                 GHCI,
                 ErrorMessage(..),
+                SrcLoc(..),
                 runStmt,
                 runType,
+                runTypeAt,
                 runImport,
                 runAddBreakpoint,
                 runLoad,
@@ -23,6 +25,7 @@ import System.Exit
 import System.IO hiding (stdin, stdout, stderr)
 import Data.Char
 import Text.Regex
+import Text.Printf
 
 -- import Control.Applicative
 import Control.Monad
@@ -343,3 +346,10 @@ runStmtWithTracing filePath stmt = do
       if path == filePath
       then Step
       else ForceResult
+
+data SrcLoc = SrcLoc !Int !Int
+
+runTypeAt :: FilePath -> SrcLoc -> SrcLoc -> String -> GHCI String
+runTypeAt filePath (SrcLoc line_start col_start) (SrcLoc line_end col_end) stmt = do
+  res <- runGHCICommand $ printf ":type-at %s %d %d %d %d %s" filePath line_start col_start line_end col_end stmt
+  return $ getStmtResult res

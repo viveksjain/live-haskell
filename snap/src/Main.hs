@@ -59,7 +59,7 @@ evalHandler session = do
 commandHandler :: GHCISession -> Snap ()
 commandHandler session = do
   stmtResult <- liftIO $ runGHCI session $ runStmt "main"
-  evalOutput <- return . decodeResult $ stmtResult
+  let evalOutput = decodeResult stmtResult
   writeJSON evalOutput
 
 decodeResult :: Either [ErrorMessage] String -> EvalOutput
@@ -76,18 +76,15 @@ typeAtHandler session = do
   text'       <- getParam "text"
   case (line_start', col_start', line_end', col_end', text') of
     (Just line_start, Just col_start, Just line_end, Just col_end, Just text) -> do
-      evalOutput <- liftIO $ runTypeAt session line_start col_start line_end col_end text :: Snap EvalOutput
+      let typeAt = runTypeAt "/tmp/test.hs" start end (BC.unpack text)
+          start = (SrcLoc (read $ BC.unpack line_start) (read $ BC.unpack col_start))
+          end = (SrcLoc (read $ BC.unpack line_end) (read $ BC.unpack col_end))
+      stmtResult <- liftIO $ runGHCI session typeAt
+      let evalOutput = decodeResult stmtResult
       writeJSON evalOutput
     _ -> return ()
 
--- runTypeAt <GHCISession> <line> <col> <end-line> <end-col> <text>
-runTypeAt :: GHCISession -> ByteString -> ByteString -> ByteString -> ByteString -> ByteString -> IO EvalOutput
-runTypeAt session line_start col_start line_end col_end text = do
-  res <- runGHCI session $ do
-    let x = map BC.unpack [line_start, col_start, line_end, col_end, text] :: [String]
-    let y = foldr (++) "" . List.intersperse " " $ x :: String
-    runStmt $ ":type-at /tmp/test.hs " ++ y
-  return . decodeResult $ res
+
 
 run :: GHCISession -> ByteString -> IO EvalOutput
 run session script = do
