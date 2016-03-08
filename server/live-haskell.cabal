@@ -1,4 +1,4 @@
-Name:                barebones
+Name:                live-haskell
 Version:             0.1
 Synopsis:            Project Synopsis Here
 Description:         Project Description Here
@@ -22,7 +22,7 @@ library
   default-language:    Haskell2010
 
 
-Executable barebones
+Executable server
   hs-source-dirs: src
   main-is: Main.hs
   other-modules: GHCIWrap, ErrorParser, HsParser, MiniHsParser
