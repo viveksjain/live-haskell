@@ -106,7 +106,9 @@ readUntilPrompt stdout = do
           Nothing -> do
             rest <- readLoop
             return $ line ++ rest
-          Just _ -> return [] -- and eat the prompt
+          Just _ -> do
+            _ <- hGetChar stdout  -- eat one more space
+            return [] -- and eat the prompt
   readLoop
 
 readErrors :: Handle -> IO String
@@ -122,11 +124,6 @@ readErrors stderr = do
             return $ line ++ '\n' : rest
           else return []
   readLoop
-
-flushErrors :: GHCI ()
-flushErrors = GHCI $ \(GHCISession _ _ stderr _) -> do
-  readErrors stderr
-  return $ Right ()
 
 receiveGHCIRaw :: GHCI String
 receiveGHCIRaw = GHCI $ \(GHCISession _ stdout stderr _) -> do
@@ -244,7 +241,7 @@ extractMainType from = case dropConstraint from of
   where
     dropConstraint [] = Nothing
     dropConstraint ('=':'>':xs) = Just $ dropWhile isSpace xs
-    dropConstraint (x:xs) = dropConstraint xs
+    dropConstraint (_:xs) = dropConstraint xs
 
 newtype TypeResult = TypeResult { getTypeResult :: String }
 instance GHCIResult TypeResult where
@@ -287,9 +284,7 @@ data TracingStep = TS { getPosition :: !(FilePath, Int), getVars :: !(Map String
 data TracingResult = Stopped !TracingStep | Done !String deriving (Eq, Ord, Show, Read)
 
 parseTracingStep :: String -> TracingResult
-                                             -- note the space here: it's because we read until "Bla>",
-                                             -- but the prompt is "Bla> "
-parseTracingStep step | not (startsWith step " Stopped at ") = Done step
+parseTracingStep step | not (startsWith step "Stopped at ") = Done step
 parseTracingStep step = Stopped $
   let
     stopped = head $ lines step
@@ -298,12 +293,12 @@ parseTracingStep step = Stopped $
   where
     parseStopped :: String -> (FilePath, Int)
     parseStopped line =
-      let after = drop (length " Stopped at ") line
+      let after = drop (length "Stopped at ") line
           (filename, rest) = break (== ':') after
           (lineNo, _) = break (== ':') $ tail rest
       in case lineNo of
         '(':xs -> let (actualLineNo, _) = break (== ',') xs
-                  in (filename, parse xs)
+                  in (filename, parse actualLineNo)
         x -> (filename, parse x)
     -- a version of read with sensible error messages
     parse :: Read a => String -> a
@@ -315,8 +310,6 @@ parseTracingStep step = Stopped $
       case runMiniParser parseTracingLine line of
         Just (name, value) -> (name, value)
         Nothing -> ("*failed to parse*", "")
-
-type ListOutput a b = WriterT [a] GHCI b
 
 data TracingCmd = Init | Step | ForceResult deriving (Eq, Ord, Show, Read, Enum)
 
