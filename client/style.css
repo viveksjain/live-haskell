@@ -67,19 +67,8 @@ body, #file_selector_container * {
   display: none;
 }
 
-body .ace {
-  width: 50%;
-  position: absolute;
-  top: 0;
-  bottom: 0;
-}
-
-#output {
-  left: 50%;
-}
-
 .type-tooltip * {
-  // Needs overriding since qtip is inside .ace_scroller which doesn't allow selections
+  /* Needs overriding since qtip is inside .ace_scroller which doesn't allow selections. */
   -webkit-user-select: text;
   -moz-user-select: text;
   -ms-user-select: text;
@@ -89,4 +78,44 @@ body .ace {
 #editor .type-tooltip {
   font: inherit;
   max-width: 500px;
+}
+
+#live_haskell > div {
+  width: 50%;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+
+#output, #refresh {
+  left: 50%;
+}
+
+#refresh {
+  pointer-events: none;
+}
+
+#refresh.refreshable {
+  background-color: rgba(0, 0, 0, 0.2);
+}
+
+#refresh_icon {
+  pointer-events: all;
+  position: absolute;
+  right: 12px;
+  top: 10px;
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+}
+
+#refresh.refreshable #refresh_icon:not(.rotating) {
+  fill: #467FFE;
+  -webkit-filter: drop-shadow(0 1px 8px #467FFE);
+  -moz-filter: drop-shadow(0 1px 8px #467FFE);
+  filter: drop-shadow(0 1px 8px #467FFE);
+}
+
+#refresh.refreshable #refresh_icon.rotating, #refresh #refresh_icon {
+  fill: #7B7B7B;
 }

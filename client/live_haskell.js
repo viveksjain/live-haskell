@@ -11,6 +11,10 @@ function LiveHaskell() {
       that.getType();
     }
   });
+  this._editCounter = 0;
+  this.onChange(function(ev) {
+    that._editCounter++;
+  });
 
   this._output = createEditor('output');
   this._output.setOptions({
@@ -35,12 +39,15 @@ LiveHaskell.prototype.setFilename = function(filename) {
 
 LiveHaskell.prototype.setInput = function(contents) {
   this._editor.setValue(contents, 1);
+  this.evaluateInput();
 }
 
 LiveHaskell.prototype.setOutput = function(contents) {
   this._output.setValue(contents, 1);
+  this._refresher.setRefreshing(false);
 }
 
+// Show and start appropriate listeners.
 LiveHaskell.prototype.enable = function(file_selector) {
   if (!this._isEnabled) {
     this._isEnabled = true;
@@ -74,12 +81,15 @@ LiveHaskell.prototype.enable = function(file_selector) {
 }
 
 LiveHaskell.prototype.evaluateInput = function(cb) {
+  var editCount = this._editCounter;
+  this._refresher.setRefreshing(true);
   var that = this;
   $.post('evaluate', {
     filename: this._filename,
     script: this._editor.getValue(),
   }, function(result) {
     console.log(result);
+    that._evaluatedEditCount = editCount;
     that.setOutput(result.output || result.error, 1);
 
     var errors = result.errors;
@@ -110,6 +120,7 @@ LiveHaskell.prototype.getType = function () {
       range = that._editor.getSelectionRange();
       hasSelection = true;
     }
+
     $.post('type-at', {
       filename: this._filename,
       line_start: range.start.row + 1,  // 0 indexed
@@ -129,4 +140,18 @@ LiveHaskell.prototype.getType = function () {
       new Tooltip($elem, result.output);
     });
   });
+}
+
+LiveHaskell.prototype.setRefresher = function(refresher) {
+  this._refresher = refresher;
+}
+
+LiveHaskell.prototype.onChange = function(cb) {
+  this._editor.session.on('change', cb);
+}
+
+// Return true if the current buffer is not the same as what was most recently
+// evaluated.
+LiveHaskell.prototype.isOutputUpdated = function() {
+  return this._editCounter !== this._evaluatedEditCount;
 }

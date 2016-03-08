@@ -1,7 +1,7 @@
 var _tooltip = null;
 // Number of pixels away from the tooltip that the mouse will have to move to
 // close the tooltip.
-var DISTANCE = 100;
+var TOOLTIP_DISTANCE = 100;
 
 function Tooltip($elem, text) {
   if (_tooltip != null) {
@@ -40,9 +40,9 @@ Tooltip.prototype.destroy = function() {
   _tooltip = null;
 }
 
-// Add a listener to hide the tooltip if the mouse moves more than `DISTANCE`
-// pixels from the tooltip, or a key is pressed and the mouse is not inside the
-// tooltip (this still allows copying the tooltip).
+// Add a listener to hide the tooltip if the mouse moves more than
+// `TOOLTIP_DISTANCE` pixels from the tooltip, or a key is pressed and the mouse
+// is not inside the tooltip (this still allows copying the tooltip).
 Tooltip.prototype._startListeners = function() {
   var mouseListener = this._genMouseListener();
   var keyListener = this._genKeyListener();
@@ -70,7 +70,7 @@ Tooltip.prototype._genMouseListener = function() {
   var that = this;
   return function(ev) {
     that._mouse = {x: ev.pageX, y: ev.pageY};
-    if (that._getDistance() > DISTANCE) {
+    if (that._getDistance() > TOOLTIP_DISTANCE) {
       that.destroy();
     }
   }
