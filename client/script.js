@@ -20,6 +20,7 @@ function FileSelector(live_haskell) {
 
     // On success
     localStorage.filename = filename;
+    live_haskell.setFilename(filename);
     var contents = "-- Type here and it will get evaluated when you press enter (careful, make sure\n-- you don't execute any potentially dangerous code!)\nmain' :: String\nmain' = \"Hello world\"\ntest = map (+)";
     live_haskell.setInput(contents);
     live_haskell.enable(that);
@@ -31,8 +32,7 @@ FileSelector.prototype.hide = function() {
 }
 
 function LiveHaskell() {
-  this._editor = ace.edit('editor');
-  this._editor.$blockScrolling = Infinity;  // Hide Ace error message about this
+  this._editor = createEditor('editor');
   this._editor.setTheme('ace/theme/monokai');
   this._editor.session.setMode('ace/mode/haskell');
   this._editor.session.setTabSize(2);
@@ -45,8 +45,7 @@ function LiveHaskell() {
     }
   });
 
-  this._output = ace.edit('output');
-  this._output.$blockScrolling = Infinity;  // Hide Ace error message about this
+  this._output = createEditor('output');
   this._output.setOptions({
     readOnly: true,
     highlightActiveLine: false,
@@ -54,6 +53,17 @@ function LiveHaskell() {
   });
   // Hack - hide cursor
   this._output.renderer.$cursorLayer.element.style.opacity = 0;
+}
+
+function createEditor(elem) {
+  var editor = ace.edit(elem);
+  editor.$blockScrolling = Infinity;  // Hide Ace error message about this
+  editor.setFontSize(14);
+  return editor;
+}
+
+LiveHaskell.prototype.setFilename = function(filename) {
+  this._filename = filename;
 }
 
 LiveHaskell.prototype.setInput = function(contents) {
@@ -90,7 +100,10 @@ LiveHaskell.prototype.enable = function(file_selector) {
 
 LiveHaskell.prototype.evaluateInput = function(cb) {
   var that = this;
-  $.post('evaluate', {script: this._editor.getValue()}, function(result) {
+  $.post('evaluate', {
+    filename: this._filename,
+    script: this._editor.getValue(),
+  }, function(result) {
     console.log(result);
     that.setOutput(result.output || result.error, 1);
 
@@ -123,6 +136,7 @@ LiveHaskell.prototype.getType = function () {
       hasSelection = true;
     }
     $.post('type-at', {
+      filename: this._filename,
       line_start: range.start.row + 1,  // 0 indexed
       col_start: range.start.column,
       line_end: range.end.row + 1,
