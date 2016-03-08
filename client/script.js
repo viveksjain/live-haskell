@@ -122,8 +122,15 @@ LiveHaskell.prototype.getType = function () {
       col_end: range.end.column,
       text: that._editor.session.getTextRange(range),
     }, function (result) {
+      console.log(result);
       // TODO check for errs
-      new Tooltip(result.output);
+      var $elem;
+      if (hasSelection) {
+        $elem = $('#editor .ace_selection');
+      } else {
+        $elem = $('#editor .ace_cursor');
+      }
+      new Tooltip($elem, result.output);
     });
   });
 }

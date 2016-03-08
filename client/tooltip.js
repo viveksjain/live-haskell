@@ -3,14 +3,14 @@ var _tooltip = null;
 // close the tooltip.
 var DISTANCE = 100;
 
-function Tooltip(text) {
+function Tooltip($elem, text) {
   if (_tooltip != null) {
     _tooltip.destroy();
   }
 
   _tooltip = this;
   var that = this;
-  this._tooltip = $('.ace_selection').qtip({
+  this._tooltip = $elem.qtip({
     content: {text: text,},
     show: {ready: true,},
     events: {
