@@ -78,10 +78,15 @@ body .ace {
   left: 50%;
 }
 
-.qtip * {
+.type-tooltip * {
   // Needs overriding since qtip is inside .ace_scroller which doesn't allow selections
   user-select: text;
   -webkit-user-select: text;
   -moz-user-select: text;
   -ms-user-select: text;
+}
+
+#editor .type-tooltip {
+  font: inherit;
+  max-width: 500px;
 }

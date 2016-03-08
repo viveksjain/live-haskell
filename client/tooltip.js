@@ -29,7 +29,7 @@ function Tooltip($elem, text) {
       container: $('.ace_content'),
     },
     style: {
-      classes: 'qtip-tipsy',
+      classes: 'qtip-tipsy type-tooltip',
     },
   }).qtip('api');
 }
