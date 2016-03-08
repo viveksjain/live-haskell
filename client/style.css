@@ -77,3 +77,11 @@ body .ace {
 #output {
   left: 50%;
 }
+
+.qtip, .qtip * {
+  // Needs overriding since qtip is inside .ace_scroller which doesn't allow selections
+  user-select: text;
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+}

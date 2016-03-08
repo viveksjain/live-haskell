@@ -13,7 +13,7 @@ function FileSelector(live_haskell) {
     // TODO
     // $.post('open', {filename: $('#form_filename').val()}, function (result) {
     // });
-    var contents = "-- Type here and it will get evaluated when you press enter (careful, make sure\n-- you don't execute any potentially dangerous code!)\nmain' :: String\nmain' = \"Hello world\"";
+    var contents = "-- Type here and it will get evaluated when you press enter (careful, make sure\n-- you don't execute any potentially dangerous code!)\nmain' :: String\nmain' = \"Hello world\"\ntest = map (+)";
     live_haskell.setInput(contents);
     live_haskell.enable(that);
   });
@@ -27,7 +27,7 @@ function LiveHaskell() {
   this._editor = ace.edit('editor');
   this._editor.$blockScrolling = Infinity;  // Hide Ace error message about this
   this._editor.setTheme('ace/theme/monokai');
-  this._editor.getSession().setMode('ace/mode/haskell');
+  this._editor.session.setMode('ace/mode/haskell');
   this._editor.session.setTabSize(2);
   var that = this;
   this._editor.commands.addCommand({
@@ -81,7 +81,7 @@ LiveHaskell.prototype.enable = function(file_selector) {
   }
 }
 
-LiveHaskell.prototype.evaluateInput = function() {
+LiveHaskell.prototype.evaluateInput = function(cb) {
   var that = this;
   $.post('evaluate', {script: this._editor.getValue()}, function(result) {
     console.log(result);
@@ -98,19 +98,32 @@ LiveHaskell.prototype.evaluateInput = function() {
         });
       }
     }
-    that._editor.getSession().setAnnotations(aceErrors);
+    that._editor.session.setAnnotations(aceErrors);
+    if (cb) cb();
   });
 }
 
 LiveHaskell.prototype.getType = function () {
-  var range = this._editor.getSelectionRange();  // Note: rows are 0 indexed
-  $.post('type-at', {
-    line_start: range.start.row + 1,
-    col_start: range.start.column,
-    line_end: range.end.row + 1,
-    col_end: range.end.column,
-    text: 'main\'',
-  }, function (result) {
-    console.log(result);
+  var that = this;
+  this.evaluateInput(function() {
+    var range;
+    var hasSelection;
+    if (that._editor.getSelection().isEmpty()) {
+      range = that._editor.getSelection().getWordRange();
+      hasSelection = false;
+    } else {
+      range = that._editor.getSelectionRange();
+      hasSelection = true;
+    }
+    $.post('type-at', {
+      line_start: range.start.row + 1,  // 0 indexed
+      col_start: range.start.column,
+      line_end: range.end.row + 1,
+      col_end: range.end.column,
+      text: that._editor.session.getTextRange(range),
+    }, function (result) {
+      // TODO check for errs
+      new Tooltip(result.output);
+    });
   });
 }
