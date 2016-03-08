@@ -32,7 +32,7 @@ function LiveHaskell() {
   var that = this;
   this._editor.commands.addCommand({
     name: 'getType',
-    bindKey: {win: 'Ctrl-Alt-T', mac: 'Command-Option-T'},
+    bindKey: {win: 'Ctrl-Alt-;', mac: 'Command-Option-;'},
     exec: function (editor) {
       that.getType();
     }

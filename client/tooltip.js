@@ -59,7 +59,6 @@ Tooltip.prototype._startListeners = function() {
 }
 
 Tooltip.prototype._stopListeners = function() {
-  console.log('stopping');
   if (this._listeners != null) {
     $(document).off('mousemove', this._listeners.mouse);
     $(document).off('keydown', this._listeners.key);
