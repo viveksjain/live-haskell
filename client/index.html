@@ -9,13 +9,15 @@
   <script src="script.js"></script>
 </head>
 <body>
-  <div id="editor" class="ace"
->-- Type here and it will get evaluated when you press enter (careful, make sure
--- you don't execute any potentially dangerous code!)
-main :: IO ()
-main = putStrLn "Hello world"
-</div>
-
-  <div id="output" class="ace"></div>
+  <div id="file_selector_container" class="fullscreen">
+    <form id="file_selector">
+      <input type="text" class="form-control" placeholder="Enter a file path (or leave empty to create a new temporary file)" name="filename" id="form_filename">
+      <button id="form_submit" type="submit">Open</button>
+    </form>
+  </div>
+  <div id="live_haskell" class="fullscreen">
+    <div id="editor" class="ace"></div>
+    <div id="output" class="ace"></div>
+  </div>
 </body>
 </html>

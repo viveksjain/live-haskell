@@ -1,6 +1,70 @@
 * {
   box-sizing: border-box;
+}
+
+body, #file_selector_container * {
   font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+}
+
+.fullscreen {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+}
+
+#file_selector_container {
+  background-color: #1D1E1A;
+}
+
+#file_selector {
+  top: 40%;
+  left: 20%;
+  right: 20%;
+  position: absolute;
+}
+
+#form_filename {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  outline: none;
+
+  padding: 0 10px;
+  font-size: 20px;
+  line-height: 2.5;
+  width: 100%;
+  border: none;
+  color: white;
+  background-color: transparent;
+  border-bottom: 1px solid #C2C2C2;
+  transition: all 0.3s;
+  padding-right: 80px;
+}
+
+#form_filename:focus {
+  border-bottom-color: white;
+}
+
+#form_submit {
+  margin-top: 10px;
+  width: 100%;
+  font-size: 20px;
+  line-height: 2.5;
+  padding: 1px 15px;
+  background-color: #197708;
+  border: none;
+  color: white;
+  cursor: pointer;
+}
+
+#form_submit:hover {
+  background-color: #268A0D;
+}
+
+#live_haskell {
+  display: none;
 }
 
 body .ace {
