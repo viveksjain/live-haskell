@@ -1,7 +1,6 @@
 {-# LANGUAGE Unsafe #-}
 
 module GHCIWrap(GHCISession,
-                withGHCI,
                 runGHCI,
                 startGHCI,
                 stopGHCI,
@@ -23,6 +22,9 @@ module GHCIWrap(GHCISession,
 import System.Process
 import System.Exit
 import System.IO hiding (stdin, stdout, stderr)
+import System.IO.Error
+import System.Directory(getCurrentDirectory, getHomeDirectory)
+import System.FilePath((</>))
 import Data.Char
 import Text.Regex
 import Text.Printf
@@ -43,7 +45,7 @@ import ErrorParser(parseErrors, ErrorMessage(..))
 import HsParser(extractDecls)
 import MiniHsParser(runMiniParser, parseTracingLine)
 
-data GHCISession = GHCISession !Handle !Handle !Handle !ProcessHandle
+data GHCISession = GHCISession !Handle !Handle !Handle !ProcessHandle !FilePath
 
 newtype GHCI a = GHCI { getGHCI :: GHCISession -> IO (Either [ErrorMessage] a) }
 
@@ -74,8 +76,11 @@ instance Functor GHCI where
 class GHCIResult a where
   readGHCI :: String -> a
 
+getGHCICwd :: GHCI FilePath
+getGHCICwd = GHCI $ \(GHCISession _ _ _ _ dir) -> return $ Right dir
+
 sendGHCI :: String -> GHCI ()
-sendGHCI what = GHCI $ \(GHCISession stdin _ _ _) -> do
+sendGHCI what = GHCI $ \(GHCISession stdin _ _ _ _) -> do
   hPutStrLn stdin what
   putStrLn $ "Write stdin: " ++ what
   return (Right ())
@@ -126,7 +131,7 @@ readErrors stderr = do
   readLoop
 
 receiveGHCIRaw :: GHCI String
-receiveGHCIRaw = GHCI $ \(GHCISession _ stdout stderr _) -> do
+receiveGHCIRaw = GHCI $ \(GHCISession _ stdout stderr _ _) -> do
   result <- readUntilPrompt stdout
   errors <- readErrors stderr
   if not $ null errors
@@ -155,43 +160,54 @@ runGHCICommand_ cmd = do
   sendGHCI cmd
   receiveGHCI >>= return . getEmptyResult
 
-startGHCI :: IO GHCISession
-startGHCI = do
-  let args = ["exec", "ghci-ng", "--", "-XSafe", "-XNoImplicitPrelude"]
+checkExc :: (e -> Bool) -> e -> Maybe e
+checkExc f e = case f e of
+  True -> Just e
+  False -> Nothing
+
+startGHCI :: FilePath -> IO GHCISession
+startGHCI targetDir = do
+  cwd <- getCurrentDirectory
+  home <- getHomeDirectory
+  let args = ["exec", "ghci-ng", "--", "-XSafe", "-XNoImplicitPrelude",
+              "-package-db", cwd </> ".stack-work/install/x86_64-linux/lts-5.1/7.10.3/pkgdb",
+              "-package-db", home </> ".stack/snapshots/x86_64-linux/lts-5.1/7.10.3/pkgdb"]
       process = (proc' "stack" args) { std_in = CreatePipe,
                                        std_out = CreatePipe,
-                                       std_err = CreatePipe }
+                                       std_err = CreatePipe,
+                                       cwd = Just targetDir }
   (Just stdin, Just stdout, Just stderr, handle) <- createProcess process
   hSetBuffering stdin LineBuffering
   hSetBuffering stdout NoBuffering
   hSetBuffering stderr LineBuffering
-  let session = GHCISession stdin stdout stderr handle
+  let session = GHCISession stdin stdout stderr handle targetDir
   putStrLn "GHCI started"
   readErrors stderr
-  readUntilPrompt stdout
+  x <- tryJust (checkExc isEOFError) $ readUntilPrompt stdout
+  case x of
+    Right _ -> return ()
+    Left e -> do readErrors stderr
+                 throwIO e
   putStrLn "Got GHCI prompt"
   runGHCI session $ do
     runGHCICommand_ ":set +c" -- XXX: what's this?
-    runGHCICommand_ ":set -iprelude"
-    runGHCICommand_ ":l prelude/Prelude.hs"
-    runGHCICommand_ ":l prelude/System/IO.hs"
-    runGHCICommand_ ":l prelude/Data/IORef.hs"
-    runGHCICommand_ ":l prelude/Data/Array/IO.hs"
+    let preludedir = cwd </> "prelude"
+    runGHCICommand_ $ ":set -i" ++ preludedir
+    runGHCICommand_ $ ":l " ++ (preludedir </> "Prelude.hs")
+    runGHCICommand_ $ ":l " ++ (preludedir </> "System/IO.hs")
+    runGHCICommand_ $ ":l " ++ (preludedir </> "Data/IORef.hs")
+    runGHCICommand_ $ ":l " ++ (preludedir </> "Data/Array/IO.hs")
     runGHCICommand_ ":set -XImplicitPrelude"
   return session
 
 stopGHCI :: GHCISession -> IO ExitCode
-stopGHCI (GHCISession stdin stdout stderr handle) = do
+stopGHCI (GHCISession stdin stdout stderr handle _) = do
   putStrLn "done"
   try $ hPutStrLn stdin ":q" :: IO (Either IOError ())
   try $ hClose stdin :: IO (Either IOError ())
   try $ hClose stdout :: IO (Either IOError ())
   try $ hClose stderr :: IO (Either IOError ())
   waitForProcess handle
-
-withGHCI :: GHCI a -> IO (Either [ErrorMessage] a)
-withGHCI action = do
-  bracket startGHCI stopGHCI (getGHCI action)
 
 -- emacs indenter gets confused by proc for some reason
 proc' :: FilePath -> [String] -> CreateProcess
@@ -316,7 +332,8 @@ data TracingCmd = Init | Step | ForceResult deriving (Eq, Ord, Show, Read, Enum)
 runStmtWithTracing :: FilePath -> String -> GHCI ([TracingStep], String)
 runStmtWithTracing filePath stmt = do
   runDeleteStar
-  breakpoints <- ioToGHCI $ extractBreakpoints filePath
+  cwd <- getGHCICwd
+  breakpoints <- ioToGHCI $ extractBreakpoints (cwd </> filePath)
   liftIO $ putStrLn $ "Breakpoints: " ++ show breakpoints
   forM (S.toList breakpoints) runAddBreakpoint
   let loop step = do

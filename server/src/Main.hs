@@ -12,7 +12,6 @@ import Data.Aeson
 import Data.ByteString(ByteString)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BC
-import qualified Data.List as List (intersperse)
 import Data.Map.Strict(Map)
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as Text (pack)
@@ -21,11 +20,11 @@ import Control.Exception
 import GHCIWrap
 
 main :: IO ()
-main = bracket startGHCI stopGHCI $ \session -> do
+main = bracket (startGHCI "../test") stopGHCI $ \session -> do
   putStrLn "GHCI ready"
   runGHCI session $ do
-    runLoad "test.hs"
-    runStmtWithTracing "test.hs" "main'" >>= liftIO . print
+    runLoad "./app/Main.hs"
+    runStmtWithTracing "app/Main.hs" "main'" >>= liftIO . print
   putStrLn "runGHCI ok"
   runGHCI session $ runLoad "/tmp/test.hs"
   quickHttpServe $ site session
