@@ -31,16 +31,15 @@ function Tooltip($elem, text, lh_editor) {
         // Limit tooltip to its containing editor's size
         that._tooltip.tooltip.css('max-width', $('#editor .ace_scroller').width());
         that._createAce(text);
-      },
-      show: function(ev, api) {
         that._startListeners();
       },
     },
     position: {
       my: 'top center',
       at: 'bottom center',
-      viewport: $('#editor'),
+      viewport: $('.ace_content'),
       adjust: {method: 'shift',},
+      container: $('.ace_content'),
     },
     style: {
       classes: 'qtip-tipsy type_tooltip',
@@ -76,37 +75,33 @@ Tooltip.prototype._createAce = function(text) {
 
 // Add a listener to hide the tooltip if the mouse moves more than
 // `TOOLTIP_DISTANCE` pixels from the tooltip, or a key is pressed and the mouse
-// is not inside the tooltip (this still allows copying the tooltip). Also
-// listen for scrolling events from the editor
+// is not inside the tooltip (this still allows copying the tooltip).
 Tooltip.prototype._startListeners = function() {
   var mouseListener = this._genMouseListener();
   var keyListener = this._genKeyListener();
   var that = this;
-  var scrollListener = function() {
-    console.log('here!!!');
-    that.destroy();
-  }
   // Save so we can call off using them
   this._listeners = {
     mouse: mouseListener,
     key: keyListener,
-    scroll: scrollListener,
   };
   if (!DEBUG) {
     $(document).mousemove(mouseListener);
     $(document).keydown(keyListener);
   }
 
-  this._lh_editor.session.on('changeScrollLeft', scrollListener);
-  this._lh_editor.session.on('changeScrollTop', scrollListener);
+  // This is required to allow the tooltip Ace to actually be focused -
+  // otherwise, the mousedown event is triggered in tooltip Ace, then in editor
+  // Ace, but this means that the enclosing editor Ace gets the last event and
+  // will always be focused. We simply stop propagation in the tooltip Ace so
+  // that we end up with the focus.
+  this._ace.on('mousedown', function(ev) {ev.stopPropagation();});
 }
 
 Tooltip.prototype._stopListeners = function() {
   if (this._listeners != null) {
     $(document).off('mousemove', this._listeners.mouse);
     $(document).off('keydown', this._listeners.key);
-    this._lh_editor.session.off('changeScrollLeft', this._listeners.scroll);
-    this._lh_editor.session.off('changeScrollTop', this._listeners.scroll);
     this._listeners = null;
   }
 }
