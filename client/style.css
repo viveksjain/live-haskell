@@ -88,7 +88,7 @@ body, #file_selector_container * {
   display: none;
 }
 
-.type_tooltip_ace .ace_layer {
+.type_tooltip_ace .ace_text-layer {
   width: auto;
 }
 

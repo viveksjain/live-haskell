@@ -3,7 +3,7 @@ var _tooltip = null;
 // close the tooltip.
 var TOOLTIP_DISTANCE = 100;
 
-function Tooltip($elem, text) {
+function Tooltip($elem, text, lh_editor) {
   if (_tooltip != null) {
     _tooltip.destroy();
   }
@@ -15,6 +15,7 @@ function Tooltip($elem, text) {
   var $elem = $elem.filter(function() {
     return $(this).closest('.type_tooltip').length == 0;
   });
+  this._lh_editor = lh_editor;
   var that = _tooltip = this;
   this._tooltip = $elem.qtip({
     content: {text: '<div class="type_tooltip_ace"></div>'},
@@ -29,28 +30,17 @@ function Tooltip($elem, text) {
       render: function(ev, api) {
         // Limit tooltip to its containing editor's size
         that._tooltip.tooltip.css('max-width', $('#editor .ace_scroller').width());
+        that._createAce(text);
+      },
+      show: function(ev, api) {
         that._startListeners();
-        that._ace = createReadOnlyEditor(that._tooltip.tooltip.find('.type_tooltip_ace').get(0));
-        that._ace.setValue(text, 1);
-        that._ace.setOptions({maxLines: Infinity,});
-        that._ace.setTheme('ace/theme/monokai');
-        that._ace.session.setMode('ace/mode/haskell');
-        that._ace.renderer.once('afterRender', function() {
-          // Set to ace width, leaving space for padding
-          var width = $('.type_tooltip_ace .ace_text-layer').width() + 30;
-          that._tooltip.tooltip.css('width', width);
-          that._tooltip.reposition(null, false);
-          // Remove ace scrolling
-          that._ace.resize();
-        });
       },
     },
     position: {
       my: 'top center',
       at: 'bottom center',
-      viewport: $('.ace_content'),
+      viewport: $('#editor'),
       adjust: {method: 'shift',},
-      container: $('.ace_content'),
     },
     style: {
       classes: 'qtip-tipsy type_tooltip',
@@ -61,35 +51,62 @@ function Tooltip($elem, text) {
 Tooltip.prototype.destroy = function() {
   if (this._isDestroyed) return;
   this._isDestroyed = true;
-  this._ace.destroy();
   this._stopListeners();
+  this._ace.destroy();
   this._tooltip.destroy();
   _tooltip = null;
 }
 
+Tooltip.prototype._createAce = function(text) {
+  this._ace = createReadOnlyEditor(this._tooltip.tooltip.find('.type_tooltip_ace').get(0));
+  this._ace.setValue(text, 1);
+  this._ace.setOptions({maxLines: Infinity,});
+  this._ace.setTheme('ace/theme/monokai');
+  this._ace.session.setMode('ace/mode/haskell');
+  var that = this;
+  this._ace.renderer.once('afterRender', function() {
+    // Set to ace width, leaving space for padding
+    var width = $('.type_tooltip_ace .ace_text-layer').width() + 30;
+    that._tooltip.tooltip.css('width', width);
+    that._tooltip.reposition(null, false);
+    // Remove ace scrolling
+    that._ace.resize();
+  });
+}
+
 // Add a listener to hide the tooltip if the mouse moves more than
 // `TOOLTIP_DISTANCE` pixels from the tooltip, or a key is pressed and the mouse
-// is not inside the tooltip (this still allows copying the tooltip).
+// is not inside the tooltip (this still allows copying the tooltip). Also
+// listen for scrolling events from the editor
 Tooltip.prototype._startListeners = function() {
-  if (DEBUG) return;
   var mouseListener = this._genMouseListener();
   var keyListener = this._genKeyListener();
+  var that = this;
+  var scrollListener = function() {
+    console.log('here!!!');
+    that.destroy();
+  }
   // Save so we can call off using them
   this._listeners = {
     mouse: mouseListener,
     key: keyListener,
+    scroll: scrollListener,
   };
-  $(document).mousemove(mouseListener);
-  $(document).keydown(keyListener);
-  // Override only to stop propagation and thus stop the .ace_scroller listener
-  // from receiving the event, thus allowing the default action to occur.
-  this._tooltip.tooltip.mousedown(function(ev) {console.log('here'); ev.stopPropagation();});
+  if (!DEBUG) {
+    $(document).mousemove(mouseListener);
+    $(document).keydown(keyListener);
+  }
+
+  this._lh_editor.session.on('changeScrollLeft', scrollListener);
+  this._lh_editor.session.on('changeScrollTop', scrollListener);
 }
 
 Tooltip.prototype._stopListeners = function() {
   if (this._listeners != null) {
     $(document).off('mousemove', this._listeners.mouse);
     $(document).off('keydown', this._listeners.key);
+    this._lh_editor.session.off('changeScrollLeft', this._listeners.scroll);
+    this._lh_editor.session.off('changeScrollTop', this._listeners.scroll);
     this._listeners = null;
   }
 }

@@ -33,7 +33,7 @@ function createReadOnlyEditor(elem) {
   editor.setOptions({
     readOnly: true,
     highlightActiveLine: false,
-    showGutter: false
+    showGutter: false,
   });
   // Hack - hide cursor
   editor.renderer.$cursorLayer.element.style.opacity = 0;
@@ -149,7 +149,7 @@ LiveHaskell.prototype.getType = function () {
       } else {
         $elem = $('#editor .ace_cursor');
       }
-      new Tooltip($elem, result.output);
+      new Tooltip($elem, result.output, that._editor);
     });
   });
 }
