@@ -8,6 +8,7 @@ function Tooltip($elem, text, lh_editor) {
     _tooltip.destroy();
   }
 
+  this._listeners = {};
   // Remove leading and trailing whitespace
   text = text.replace(/^\s*/, '').replace(/\s*$/, '');
   // Make sure we exclude tooltips (since they contain ace as well) from
@@ -37,9 +38,10 @@ function Tooltip($elem, text, lh_editor) {
     position: {
       my: 'top center',
       at: 'bottom center',
-      viewport: $('.ace_content'),
       adjust: {method: 'shift',},
       container: $('.ace_content'),
+      viewport: true,
+      effect: false,
     },
     style: {
       classes: 'qtip-tipsy type_tooltip',
@@ -66,11 +68,49 @@ Tooltip.prototype._createAce = function(text) {
   this._ace.renderer.once('afterRender', function() {
     // Set to ace width, leaving space for padding
     var width = $('.type_tooltip_ace .ace_text-layer').width() + 30;
-    that._tooltip.tooltip.css('width', width);
+    var tooltip = that._tooltip.tooltip;
+    tooltip.css('width', width);
     that._tooltip.reposition(null, false);
     // Remove ace scrolling
     that._ace.resize();
+
+    if (that._isOutsideWindow(true)) {
+      that._tooltip.set('position.my', 'bottom center');
+      that._tooltip.set('position.at', 'top center');
+      that._tooltip.reposition(null, false);
+    }
+
+    var renderListener = that._genRenderListener();
+    that._listeners.render = renderListener;
+    that._lh_editor.renderer.on('afterRender', renderListener);
   });
+}
+
+Tooltip.prototype._isOutsideWindow = function(checkBelowOnly) {
+  var tooltip = this._tooltip.tooltip;
+  var offset = tooltip.offset();
+  return (!checkBelowOnly && offset.top < 0) ||
+    offset.top + tooltip.height() > $(window).height();
+}
+
+// Somewhat hacky, but due to Ace's rendering we need to handle scrolling
+// ourselves whenever the first line number changes.
+Tooltip.prototype._genRenderListener = function() {
+    var renderer = this._lh_editor.renderer;
+    var firstRowScreen = renderer.layerConfig.firstRowScreen;
+    var top = parseFloat(this._tooltip.tooltip.css('top'));
+    var that = this;
+    return function(ev) {
+      if (renderer.layerConfig.firstRowScreen != firstRowScreen) {
+        var delta = (firstRowScreen - renderer.layerConfig.firstRowScreen) * renderer.layerConfig.lineHeight;
+        top += delta;
+        that._tooltip.tooltip.css('top', top);
+        if (that._isOutsideWindow()) {
+          that.destroy();
+        }
+        firstRowScreen = renderer.layerConfig.firstRowScreen;
+      }
+    };
 }
 
 // Add a listener to hide the tooltip if the mouse moves more than
@@ -81,15 +121,12 @@ Tooltip.prototype._startListeners = function() {
   var keyListener = this._genKeyListener();
   var that = this;
   // Save so we can call off using them
-  this._listeners = {
-    mouse: mouseListener,
-    key: keyListener,
-  };
+  this._listeners.mouse = mouseListener;
+  this._listeners.key = keyListener;
   if (!DEBUG) {
     $(document).mousemove(mouseListener);
     $(document).keydown(keyListener);
   }
-
   // This is required to allow the tooltip Ace to actually be focused -
   // otherwise, the mousedown event is triggered in tooltip Ace, then in editor
   // Ace, but this means that the enclosing editor Ace gets the last event and
@@ -102,6 +139,7 @@ Tooltip.prototype._stopListeners = function() {
   if (this._listeners != null) {
     $(document).off('mousemove', this._listeners.mouse);
     $(document).off('keydown', this._listeners.key);
+    this._lh_editor.renderer.off('afterRender', this._listeners.render);
     this._listeners = null;
   }
 }
@@ -110,7 +148,8 @@ Tooltip.prototype._genMouseListener = function() {
   var that = this;
   return function(ev) {
     that._mouse = {x: ev.pageX, y: ev.pageY};
-    if (that._getDistance() > TOOLTIP_DISTANCE) {
+    if (that._getDistance() > TOOLTIP_DISTANCE &&
+        that._tooltip.tooltip.find('.ace_selecting').length == 0) {
       that.destroy();
     }
   }
@@ -134,8 +173,9 @@ Tooltip.prototype._getDimensionDistance = function(mouse, start, len) {
 Tooltip.prototype._genKeyListener = function() {
   var that = this;
   return function(ev) {
-    if (!that._mouse || that._getDistance() > 0) {
-      that.destroy();
-    }
+    if (ev.metaKey || ev.ctrlKey) return;
+    // C, to allow for copying without closing tooltip
+    if (ev.keyCode == 67) return;
+    that.destroy();
   }
 }
