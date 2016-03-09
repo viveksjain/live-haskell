@@ -1,3 +1,5 @@
+var DEBUG = false;
+
 $(document).ready(function () {
   // Purposely a global to allow for easier debugging.
   live_haskell = new LiveHaskell();

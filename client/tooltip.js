@@ -8,17 +8,41 @@ function Tooltip($elem, text) {
     _tooltip.destroy();
   }
 
-  _tooltip = this;
-  var that = this;
+  // Remove leading and trailing whitespace
+  text = text.replace(/^\s*/, '').replace(/\s*$/, '');
+  // Make sure we exclude tooltips (since they contain ace as well) from
+  // selection.
+  var $elem = $elem.filter(function() {
+    return $(this).closest('.type_tooltip').length == 0;
+  });
+  var that = _tooltip = this;
   this._tooltip = $elem.qtip({
-    content: {text: text,},
+    content: {text: '<div class="type_tooltip_ace"></div>'},
     show: {ready: true,},
+    hide: {
+      leave: (function() {if (DEBUG) return false; else return "window";})(),
+    },
     events: {
       hidden: function(ev, api) {
         that.destroy();
       },
       render: function(ev, api) {
+        // Limit tooltip to its containing editor's size
+        that._tooltip.tooltip.css('max-width', $('#editor .ace_scroller').width());
         that._startListeners();
+        that._ace = createReadOnlyEditor(that._tooltip.tooltip.find('.type_tooltip_ace').get(0));
+        that._ace.setValue(text, 1);
+        that._ace.setOptions({maxLines: Infinity,});
+        that._ace.setTheme('ace/theme/monokai');
+        that._ace.session.setMode('ace/mode/haskell');
+        that._ace.renderer.once('afterRender', function() {
+          // Set to ace width, leaving space for padding
+          var width = $('.type_tooltip_ace .ace_text-layer').width() + 30;
+          that._tooltip.tooltip.css('width', width);
+          that._tooltip.reposition(null, false);
+          // Remove ace scrolling
+          that._ace.resize();
+        });
       },
     },
     position: {
@@ -29,14 +53,17 @@ function Tooltip($elem, text) {
       container: $('.ace_content'),
     },
     style: {
-      classes: 'qtip-tipsy type-tooltip',
+      classes: 'qtip-tipsy type_tooltip',
     },
   }).qtip('api');
 }
 
 Tooltip.prototype.destroy = function() {
-  this._tooltip.destroy();
+  if (this._isDestroyed) return;
+  this._isDestroyed = true;
+  this._ace.destroy();
   this._stopListeners();
+  this._tooltip.destroy();
   _tooltip = null;
 }
 
@@ -44,6 +71,7 @@ Tooltip.prototype.destroy = function() {
 // `TOOLTIP_DISTANCE` pixels from the tooltip, or a key is pressed and the mouse
 // is not inside the tooltip (this still allows copying the tooltip).
 Tooltip.prototype._startListeners = function() {
+  if (DEBUG) return;
   var mouseListener = this._genMouseListener();
   var keyListener = this._genKeyListener();
   // Save so we can call off using them
@@ -55,7 +83,7 @@ Tooltip.prototype._startListeners = function() {
   $(document).keydown(keyListener);
   // Override only to stop propagation and thus stop the .ace_scroller listener
   // from receiving the event, thus allowing the default action to occur.
-  this._tooltip.tooltip.mousedown(function(ev) {ev.stopPropagation();});
+  this._tooltip.tooltip.mousedown(function(ev) {console.log('here'); ev.stopPropagation();});
 }
 
 Tooltip.prototype._stopListeners = function() {

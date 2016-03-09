@@ -67,7 +67,7 @@ body, #file_selector_container * {
   display: none;
 }
 
-.type-tooltip * {
+.type_tooltip * {
   /* Needs overriding since qtip is inside .ace_scroller which doesn't allow selections. */
   -webkit-user-select: text;
   -moz-user-select: text;
@@ -75,9 +75,21 @@ body, #file_selector_container * {
   user-select: text;
 }
 
-#editor .type-tooltip {
+#editor .type_tooltip {
   font: inherit;
-  max-width: 500px;
+  text-shadow: none;
+}
+
+.type_tooltip_ace.ace-monokai {
+  background-color: inherit;
+}
+
+.type_tooltip_ace .ace_scrollbar-h {
+  display: none;
+}
+
+.type_tooltip_ace .ace_layer {
+  width: auto;
 }
 
 #live_haskell > div {

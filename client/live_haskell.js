@@ -3,7 +3,11 @@ function LiveHaskell() {
   this._editor.setTheme('ace/theme/monokai');
   this._editor.session.setMode('ace/mode/haskell');
   this._editor.session.setTabSize(2);
+  this._editCounter = 0;
   var that = this;
+  this.onChange(function(ev) {
+    that._editCounter++;
+  });
   this._editor.commands.addCommand({
     name: 'getType',
     bindKey: {win: 'Ctrl-Alt-;', mac: 'Command-Option-;'},
@@ -11,25 +15,27 @@ function LiveHaskell() {
       that.getType();
     }
   });
-  this._editCounter = 0;
-  this.onChange(function(ev) {
-    that._editCounter++;
-  });
 
-  this._output = createEditor('output');
-  this._output.setOptions({
-    readOnly: true,
-    highlightActiveLine: false,
-    showGutter: false
-  });
-  // Hack - hide cursor
-  this._output.renderer.$cursorLayer.element.style.opacity = 0;
+  this._output = createReadOnlyEditor('output');
 }
 
 function createEditor(elem) {
   var editor = ace.edit(elem);
   editor.$blockScrolling = Infinity;  // Hide Ace error message about this
   editor.setFontSize(14);
+  editor.session.setTabSize(2);
+  return editor;
+}
+
+function createReadOnlyEditor(elem) {
+  var editor = createEditor(elem);
+  editor.setOptions({
+    readOnly: true,
+    highlightActiveLine: false,
+    showGutter: false
+  });
+  // Hack - hide cursor
+  editor.renderer.$cursorLayer.element.style.opacity = 0;
   return editor;
 }
 
@@ -81,6 +87,11 @@ LiveHaskell.prototype.enable = function(file_selector) {
 }
 
 LiveHaskell.prototype.evaluateInput = function(cb) {
+  if (!this.isOutputChanged()) {
+    console.log('Output already up-to-date');
+    if (cb) cb();
+    return;
+  }
   var editCount = this._editCounter;
   this._refresher.setRefreshing(true);
   var that = this;
@@ -152,6 +163,6 @@ LiveHaskell.prototype.onChange = function(cb) {
 
 // Return true if the current buffer is not the same as what was most recently
 // evaluated.
-LiveHaskell.prototype.isOutputUpdated = function() {
+LiveHaskell.prototype.isOutputChanged = function() {
   return this._editCounter !== this._evaluatedEditCount;
 }

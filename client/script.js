@@ -52,8 +52,7 @@ Refresher.prototype.setRefreshing = function(isRefreshing) {
     this._$icon.addClass('rotating');
   } else {
     this._$icon.removeClass('rotating');
-    // Ensure no changes between the text that was evaluated and now.
-    if (!this._live_haskell.isOutputUpdated()) {
+    if (!this._live_haskell.isOutputChanged()) {
       this._setRefreshable(false);
     }
   }
