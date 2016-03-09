@@ -3,6 +3,7 @@ function LiveHaskell() {
   this._editor.setTheme('ace/theme/monokai');
   this._editor.session.setMode('ace/mode/haskell');
   this._editor.session.setTabSize(2);
+  this._editor.setOptions({enableBasicAutocompletion: true,});
   this._editCounter = 0;
   var that = this;
   this.onChange(function(ev) {
