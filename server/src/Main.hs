@@ -50,14 +50,10 @@ echoHandler = do
           writeBS param
 
 createTempFileHandle :: IO Handle
-createTempFileHandle = do
-  res <- IO.openTempFile "/tmp/" "live-haskell.hs"
-  return $ snd res
+createTempFileHandle = IO.openTempFile "/tmp/" "live-haskell.hs" >>= return . snd
 
 openFileHandle :: FilePath -> IO (FilePath, Handle)
-openFileHandle fp = do
-  h <- IO.openFile fp WriteMode
-  return (fp, h)
+openFileHandle fp = IO.openFile fp WriteMode >>= \h -> return (fp,h)
 
 evalHandler :: GHCISession -> Snap ()
 evalHandler session = do
