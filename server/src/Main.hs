@@ -27,7 +27,7 @@ main = bracket (startGHCI "../test") stopGHCI $ \session -> do
   putStrLn "GHCI ready"
   runGHCI session $ do
     runLoad "./app/Main.hs"
-    runStmtWithTracing "app/Main.hs" "main'" >>= liftIO . print
+    runStmtWithTracing "app/Main.hs" "main" >>= liftIO . print
   putStrLn "runGHCI ok"
   -- runGHCI session $ runLoad "/tmp/test.hs" This should go in the new open handler
   quickHttpServe $ site session

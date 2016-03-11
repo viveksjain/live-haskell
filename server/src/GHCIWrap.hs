@@ -199,6 +199,7 @@ startGHCI targetDir = do
     runGHCICommand_ $ ":l " ++ (preludedir </> "Data/IORef.hs")
     runGHCICommand_ $ ":l " ++ (preludedir </> "Data/Array/IO.hs")
     runGHCICommand_ ":set -XImplicitPrelude"
+    runGHCICommand_ ":set -main-is Prelude.hiddenDummyMain"
   return session
 
 stopGHCI :: GHCISession -> IO ExitCode
