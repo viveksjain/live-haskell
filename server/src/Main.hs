@@ -17,6 +17,8 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Maybe as Maybe (fromMaybe)
 import qualified Data.Text as Text (pack)
 import Control.Exception
+import System.IO (Handle, IOMode(WriteMode))
+import System.IO as IO (hClose, hFlush, openFile, openTempFile)
 
 import GHCIWrap
 
@@ -27,7 +29,7 @@ main = bracket (startGHCI "../test") stopGHCI $ \session -> do
     runLoad "./app/Main.hs"
     runStmtWithTracing "app/Main.hs" "main'" >>= liftIO . print
   putStrLn "runGHCI ok"
-  runGHCI session $ runLoad "/tmp/test.hs"
+  -- runGHCI session $ runLoad "/tmp/test.hs" This should go in the new open handler
   quickHttpServe $ site session
 
 site :: GHCISession -> Snap ()
@@ -46,14 +48,30 @@ echoHandler = do
     maybe (writeBS "must specify echo/param in URL")
           writeBS param
 
+createTempFileHandle :: IO Handle
+createTempFileHandle = do
+  res <- openTempFile "/tmp/" "live-haskell.hs"
+  return $ snd res
+
+openFileHandle :: FilePath -> IO (FilePath, Handle)
+openFileHandle fp = do
+  h <- IO.openFile fp WriteMode
+  return (fp, h)
+
 evalHandler :: GHCISession -> Snap ()
 evalHandler session = do
-  param' <- getParam "script"
+  param'    <- getParam "script"
+  filename' <- getParam "filename"
+  (fp, h)   <- case filename' of
+    Just filePath | not . BS.null $ filePath ->
+          liftIO $ openFileHandle . BC.unpack $ filePath
+    _  -> liftIO $ openTempFile "/tmp/" "live-haskell.hs"
   case param' of
     Nothing -> return ()
     Just param -> do
-      evalOutput <- liftIO $ run session param :: Snap EvalOutput
+      evalOutput <- liftIO $ run session (fp, h) param :: Snap EvalOutput
       writeJSON evalOutput
+
 
 commandHandler :: GHCISession -> Snap ()
 commandHandler session = do
@@ -86,12 +104,13 @@ typeAtHandler session = do
     _ -> return ()
 
 
-
-run :: GHCISession -> ByteString -> IO EvalOutput
-run session script = do
-  BS.writeFile "/tmp/test.hs" script
+run :: GHCISession -> (FilePath, Handle) -> ByteString -> IO EvalOutput
+run session (filePath,h) script = do
+  BS.hPut h script
+  IO.hFlush h
+  IO.hClose h
   res <- runGHCI session $ do
-    runReload
+    runLoad2 filePath -- runReload
   return . decodeResult $ res
 
 data EvalOutput = EvalOutput {

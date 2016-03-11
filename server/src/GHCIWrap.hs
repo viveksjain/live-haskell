@@ -13,6 +13,7 @@ module GHCIWrap(GHCISession,
                 runImport,
                 runAddBreakpoint,
                 runLoad,
+                runLoad2,
                 runReload,
                 runDeleteStar,
                 extractBreakpoints,
@@ -274,6 +275,9 @@ runImport imp = runGHCICommand_ ("import " ++ imp)
 
 runLoad :: String -> GHCI ()
 runLoad file = runGHCICommand_ (":l " ++ file)
+
+runLoad2 :: String -> GHCI String
+runLoad2 file = runGHCICommand (":l " ++ file) >>= return . getStmtResult
 
 runReload :: GHCI String
 runReload = runGHCICommand (":r") >>= return . getStmtResult
