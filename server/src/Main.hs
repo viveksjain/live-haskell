@@ -18,7 +18,7 @@ import qualified Data.Maybe as Maybe (fromMaybe)
 import qualified Data.Text as Text (pack)
 import Control.Exception
 import System.IO (Handle, IOMode(WriteMode))
-import System.IO as IO (hClose, hFlush, openFile, openTempFile)
+import qualified System.IO as IO (hClose, hFlush, openFile, openTempFile, readFile)
 
 import GHCIWrap
 
@@ -38,6 +38,7 @@ site session =
           , ("evaluate", method POST $ evalHandler session)
           , ("type-at", method POST $ typeAtHandler session)
           , ("command", method POST $ commandHandler session)
+          , ("open", method POST $ openHandler)
           , ("foo", writeBS "bar")
           , ("echo/:echoparam", echoHandler)
           ]
@@ -50,7 +51,7 @@ echoHandler = do
 
 createTempFileHandle :: IO Handle
 createTempFileHandle = do
-  res <- openTempFile "/tmp/" "live-haskell.hs"
+  res <- IO.openTempFile "/tmp/" "live-haskell.hs"
   return $ snd res
 
 openFileHandle :: FilePath -> IO (FilePath, Handle)
@@ -65,7 +66,7 @@ evalHandler session = do
   (fp, h)   <- case filename' of
     Just filePath | not . BS.null $ filePath ->
           liftIO $ openFileHandle . BC.unpack $ filePath
-    _  -> liftIO $ openTempFile "/tmp/" "live-haskell.hs"
+    _  -> liftIO $ IO.openTempFile "/tmp/" "live-haskell.hs"
   case param' of
     Nothing -> return ()
     Just param -> do
@@ -103,6 +104,19 @@ typeAtHandler session = do
       writeJSON evalOutput
     _ -> return ()
 
+openHandler :: Snap ()
+openHandler =
+  let param :: Maybe BS.ByteString -> BS.ByteString
+      param p = Maybe.fromMaybe BS.empty p
+      read :: BS.ByteString -> IO OpenOutput
+      read fp | BS.null fp = return NoFilePathSupplied
+              | otherwise = do
+                result <- try (IO.readFile . BC.unpack $ fp) :: IO (Either SomeException String)
+                case result of
+                  Left ex -> return . OpenError $ ex
+                  Right s -> return . FileContents $ s
+  in
+    getParam "filename" >>= liftIO . read . param >>= writeJSON
 
 run :: GHCISession -> (FilePath, Handle) -> ByteString -> IO EvalOutput
 run session (filePath,h) script = do
@@ -125,3 +139,17 @@ instance ToJSON EvalOutput where
 instance (Show k, ToJSON v) => ToJSON (Map k v) where
   toJSON m | Map.null m = object []
            | otherwise  = object . Map.toList . Map.map toJSON . (Map.mapKeys (\k -> Text.pack . show $ k)) $ m
+
+data OpenOutput = FileContents String | OpenError SomeException | NoFilePathSupplied
+
+instance ToJSON OpenOutput where
+  toJSON (NoFilePathSupplied)  = object ["endpoint" .= s2j "/open", "status" .= s2j "passthrough", "details" .= s2j "no file path supplied by user"]
+  toJSON (OpenError errorMessage)  = object ["endpoint" .= s2j "/open", "status" .= s2j "error", "details" .= show errorMessage]
+  toJSON (FileContents fileContents) = object ["endpoint" .= s2j "/open", "status" .= s2j "success", "details" .= fileContents]
+
+stringToJSON :: String -> Value
+stringToJSON s = String . Text.pack $ s
+
+-- a much shorter alias for stringToJSON
+s2j :: String -> Value
+s2j = stringToJSON
