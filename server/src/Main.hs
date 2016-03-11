@@ -14,6 +14,7 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BC
 import Data.Map.Strict(Map)
 import qualified Data.Map.Strict as Map
+import qualified Data.Maybe as Maybe (fromMaybe)
 import qualified Data.Text as Text (pack)
 import Control.Exception
 
@@ -34,7 +35,6 @@ site session =
     route [ ("", serveDirectory "../client")
           , ("evaluate", method POST $ evalHandler session)
           , ("type-at", method POST $ typeAtHandler session)
-          -- , ("type-at/:line_start/:col_start/:line_end/:col_end/:text",  typeAtHandler session) -- for testing without the UI
           , ("command", method POST $ commandHandler session)
           , ("foo", writeBS "bar")
           , ("echo/:echoparam", echoHandler)
@@ -57,7 +57,9 @@ evalHandler session = do
 
 commandHandler :: GHCISession -> Snap ()
 commandHandler session = do
-  stmtResult <- liftIO $ runGHCI session $ runStmt "main"
+  param' <- getParam "script"
+  let param = BC.unpack . (Maybe.fromMaybe "main") $ param'
+  stmtResult <- liftIO $ runGHCI session $ runStmt param
   let evalOutput = decodeResult stmtResult
   writeJSON evalOutput
 

@@ -190,7 +190,7 @@ startGHCI targetDir = do
                  throwIO e
   putStrLn "Got GHCI prompt"
   runGHCI session $ do
-    runGHCICommand_ ":set +c" -- XXX: what's this?
+    runGHCICommand_ ":set +c" -- required for ghci-ng
     let preludedir = cwd </> "prelude"
     runGHCICommand_ $ ":set -i" ++ preludedir
     runGHCICommand_ $ ":l " ++ (preludedir </> "Prelude.hs")
