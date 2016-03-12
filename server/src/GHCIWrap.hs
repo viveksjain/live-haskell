@@ -193,11 +193,11 @@ startGHCI targetDir = do
   runGHCI session $ do
     runGHCICommand_ ":set +c" -- required for ghci-ng
     let preludedir = cwd </> "prelude"
-    runGHCICommand_ $ ":set -i" ++ preludedir
-    runGHCICommand_ $ ":l " ++ (preludedir </> "Prelude.hs")
-    runGHCICommand_ $ ":l " ++ (preludedir </> "System/IO.hs")
-    runGHCICommand_ $ ":l " ++ (preludedir </> "Data/IORef.hs")
-    runGHCICommand_ $ ":l " ++ (preludedir </> "Data/Array/IO.hs")
+    runGHCICommand_ $ ":set \"-i" ++ preludedir ++ "\""
+    runGHCICommand_ $ ":l \"" ++ (preludedir </> "Prelude.hs") ++ "\""
+    runGHCICommand_ $ ":l \"" ++ (preludedir </> "System/IO.hs") ++ "\""
+    runGHCICommand_ $ ":l \"" ++ (preludedir </> "Data/IORef.hs") ++ "\""
+    runGHCICommand_ $ ":l \"" ++ (preludedir </> "Data/Array/IO.hs") ++ "\""
     runGHCICommand_ ":set -XImplicitPrelude"
     runGHCICommand_ ":set -main-is Prelude.hiddenDummyMain"
   return session
@@ -275,10 +275,10 @@ runImport :: String -> GHCI ()
 runImport imp = runGHCICommand_ ("import " ++ imp)
 
 runLoad :: String -> GHCI ()
-runLoad file = runGHCICommand_ (":l " ++ file)
+runLoad file = runGHCICommand_ (":l \"" ++ file ++ "\"")
 
 runLoad2 :: String -> GHCI String
-runLoad2 file = runGHCICommand (":l " ++ file) >>= return . getStmtResult
+runLoad2 file = runGHCICommand (":l \"" ++ file ++ "\"") >>= return . getStmtResult
 
 runReload :: GHCI String
 runReload = runGHCICommand (":r") >>= return . getStmtResult
