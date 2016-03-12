@@ -18,7 +18,11 @@ import qualified Data.Maybe as Maybe (fromMaybe)
 import qualified Data.Text as Text (pack)
 import Control.Exception
 import System.IO (Handle, IOMode(WriteMode))
+import qualified System.Directory as Dir (doesFileExist, getCurrentDirectory)
+import System.FilePath ((</>))
 import qualified System.IO as IO (hClose, hFlush, openFile, openTempFile, readFile)
+import qualified System.IO.Temp as IO.Temp (createTempDirectory)
+import qualified SystemPathCopy as Path (copyDir)
 
 import GHCIWrap
 
@@ -39,6 +43,8 @@ site session =
           , ("type-at", method POST $ typeAtHandler session)
           , ("command", method POST $ commandHandler session)
           , ("open", method POST $ openHandler)
+          , ("openStack/:dirname/:filename", openStackHandler) --for testing only
+          -- , ("openStack/:dirname/:filename", method POST $ openStackHandler)
           , ("foo", writeBS "bar")
           , ("echo/:echoparam", echoHandler)
           ]
@@ -62,7 +68,7 @@ evalHandler session = do
   (fp, h)   <- case filename' of
     Just filePath | not . BS.null $ filePath ->
           liftIO $ openFileHandle . BC.unpack $ filePath
-    _  -> liftIO $ IO.openTempFile "/tmp/" "live-haskell.hs"
+    _  -> liftIO $ IO.openTempFile "/tmp/live-haskell/" "lh.hs"
   case param' of
     Nothing -> return ()
     Just param -> do
@@ -107,12 +113,50 @@ openHandler =
       read :: BS.ByteString -> IO OpenOutput
       read fp | BS.null fp = return NoFilePathSupplied
               | otherwise = do
-                result <- try (IO.readFile . BC.unpack $ fp) :: IO (Either SomeException String)
+                let fp' = BC.unpack fp :: FilePath
+                result <- try (IO.readFile fp') :: IO (Either SomeException String)
                 case result of
                   Left ex -> return . OpenError $ ex
-                  Right s -> return . FileContents $ s
+                  Right s -> return $ FileContents fp' fp' s
   in
     getParam "filename" >>= liftIO . read . param >>= writeJSON
+
+openStackHandler :: Snap ()
+openStackHandler = do
+  let param :: Maybe BS.ByteString -> BS.ByteString
+      param p = Maybe.fromMaybe BS.empty p
+      read :: BS.ByteString -> BS.ByteString -> IO OpenOutput
+      read dp fp | BS.null dp = createNewProjectDirectory >>= \(d,f,s) -> return $ FileContents d f s
+                 | BS.null fp = return NoFilePathSupplied
+                 | otherwise = do
+                    let dp' = BC.unpack dp :: FilePath
+                        fp' = BC.unpack fp :: FilePath
+                    isStack <- isStackProject dp' :: IO Bool
+                    case isStack of
+                      -- False -> return NotStackProject -- commented out while testing without UI changes
+                      False -> createNewProjectDirectory >>= \(d,f,s) -> return $ FileContents d f s
+                      True  -> do
+                        result <- try (IO.readFile (dp' </> fp')) :: IO (Either SomeException String)
+                        case result of
+                          Left ex -> return . OpenError $ ex
+                          Right s -> return $ FileContents dp' fp' s
+  filename' <- getParam $ "filename" :: Snap (Maybe BS.ByteString)
+  dirname'  <- getParam $ "dirname" :: Snap (Maybe BS.ByteString)
+  filename  <- return . param $ filename'
+  dirname   <- return . param $ dirname'
+  liftIO (read dirname filename) >>= writeJSON
+
+createNewProjectDirectory :: IO (FilePath, FilePath, String)
+createNewProjectDirectory = do
+  cwd <- Dir.getCurrentDirectory
+  let from = cwd </> ".." </> "test"
+  to <- IO.Temp.createTempDirectory "/tmp" "live-haskell" :: IO FilePath
+  Path.copyDir from to
+  let file = to </> "app" </> "Main.hs"
+  readFile file >>= \s -> return (to, "app" </> "Main.hs", s)
+
+isStackProject :: FilePath -> IO Bool
+isStackProject fp = Dir.doesFileExist $ fp </> "stack.yaml"
 
 run :: GHCISession -> (FilePath, Handle) -> ByteString -> IO EvalOutput
 run session (filePath,h) script = do
@@ -136,12 +180,13 @@ instance (Show k, ToJSON v) => ToJSON (Map k v) where
   toJSON m | Map.null m = object []
            | otherwise  = object . Map.toList . Map.map toJSON . (Map.mapKeys (\k -> Text.pack . show $ k)) $ m
 
-data OpenOutput = FileContents String | OpenError SomeException | NoFilePathSupplied
+data OpenOutput = FileContents FilePath FilePath String | OpenError SomeException | NoFilePathSupplied | NotStackProject
 
 instance ToJSON OpenOutput where
-  toJSON (NoFilePathSupplied)  = object ["endpoint" .= s2j "/open", "status" .= s2j "passthrough", "details" .= s2j "no file path supplied by user"]
+  toJSON (NoFilePathSupplied)  = object ["endpoint" .= s2j "/open", "status" .= s2j "error", "details" .= s2j "no file path supplied by user"]
+  toJSON (NotStackProject)  = object ["endpoint" .= s2j "/open", "status" .= s2j "error", "details" .= s2j "not a stack project"]
   toJSON (OpenError errorMessage)  = object ["endpoint" .= s2j "/open", "status" .= s2j "error", "details" .= show errorMessage]
-  toJSON (FileContents fileContents) = object ["endpoint" .= s2j "/open", "status" .= s2j "success", "details" .= fileContents]
+  toJSON (FileContents dir file fileContents) = object ["endpoint" .= s2j "/open", "status" .= s2j "success", "details" .= fileContents, "dir" .= dir, "file" .= file]
 
 stringToJSON :: String -> Value
 stringToJSON s = String . Text.pack $ s
