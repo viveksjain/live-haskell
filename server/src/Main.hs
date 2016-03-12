@@ -43,8 +43,8 @@ site session =
           , ("type-at", method POST $ typeAtHandler session)
           , ("command", method POST $ commandHandler session)
           , ("open", method POST $ openHandler)
-          , ("openStack/:dirname/:filename", openStackHandler) --for testing only
-          -- , ("openStack/:dirname/:filename", method POST $ openStackHandler)
+          -- , ("openStack/:dirname/:filename", openStackHandler session) --for testing only
+          , ("openStack", method POST $ openStackHandler session)
           , ("foo", writeBS "bar")
           , ("echo/:echoparam", echoHandler)
           ]
@@ -121,25 +121,33 @@ openHandler =
   in
     getParam "filename" >>= liftIO . read . param >>= writeJSON
 
-openStackHandler :: Snap ()
-openStackHandler = do
+openStackHandler :: GHCISession -> Snap ()
+openStackHandler session = do
   let param :: Maybe BS.ByteString -> BS.ByteString
       param p = Maybe.fromMaybe BS.empty p
       read :: BS.ByteString -> BS.ByteString -> IO OpenOutput
-      read dp fp | BS.null dp = createNewProjectDirectory >>= \(d,f,s) -> return $ FileContents d f s
+      read dp fp | BS.null dp = do
+        (d,f,s) <- createNewProjectDirectory
+        runGHCI session (runCd d)
+        return $ FileContents d f s
                  | BS.null fp = return NoFilePathSupplied
                  | otherwise = do
                     let dp' = BC.unpack dp :: FilePath
                         fp' = BC.unpack fp :: FilePath
                     isStack <- isStackProject dp' :: IO Bool
                     case isStack of
-                      -- False -> return NotStackProject -- commented out while testing without UI changes
-                      False -> createNewProjectDirectory >>= \(d,f,s) -> return $ FileContents d f s
+                      False -> return NotStackProject -- commented out while testing without UI changes
+                      -- False -> do
+                      --   (d,f,s) <- createNewProjectDirectory
+                      --   runGHCI session (runCd d)
+                      --   return $ FileContents d f s
                       True  -> do
                         result <- try (IO.readFile (dp' </> fp')) :: IO (Either SomeException String)
                         case result of
                           Left ex -> return . OpenError $ ex
-                          Right s -> return $ FileContents dp' fp' s
+                          Right s -> do
+                            runGHCI session (runCd dp')
+                            return $ FileContents dp' fp' s
   filename' <- getParam $ "filename" :: Snap (Maybe BS.ByteString)
   dirname'  <- getParam $ "dirname" :: Snap (Maybe BS.ByteString)
   filename  <- return . param $ filename'

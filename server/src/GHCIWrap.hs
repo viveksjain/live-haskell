@@ -16,6 +16,7 @@ module GHCIWrap(GHCISession,
                 runLoad2,
                 runReload,
                 runDeleteStar,
+                runCd,
                 extractBreakpoints,
                 runStmtWithTracing,
                 TracingStep(..)) where
@@ -285,6 +286,9 @@ runReload = runGHCICommand (":r") >>= return . getStmtResult
 
 runDeleteStar :: GHCI ()
 runDeleteStar = runGHCICommand_ ":delete *"
+
+runCd :: String -> GHCI ()
+runCd d = runGHCICommand_ (":cd " ++ d)
 
 extractBreakpoints :: FilePath -> IO (Either [ErrorMessage] (Set String))
 extractBreakpoints path = do
