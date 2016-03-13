@@ -23,20 +23,22 @@ import System.FilePath ((</>))
 import qualified System.IO as IO (hClose, hFlush, openFile, openTempFile, readFile)
 import qualified System.IO.Temp as IO.Temp (createTempDirectory)
 import qualified SystemPathCopy as Path (copyDir)
+import Control.Concurrent.MVar
 
 import GHCIWrap
 
 main :: IO ()
-main = bracket (startGHCI "../test") stopGHCI $ \session -> do
+main = bracket (startGHCI "../test") stopGHCI $ \initialSession -> do
+  mvar <- newMVar initialSession
   putStrLn "GHCI ready"
-  runGHCI session $ do
+  runGHCI initialSession $ do
     runLoad "./app/Main.hs"
     runStmtWithTracing "app/Main.hs" "main" >>= liftIO . print
   putStrLn "runGHCI ok"
   -- runGHCI session $ runLoad "/tmp/test.hs" This should go in the new open handler
-  quickHttpServe $ site session
+  quickHttpServe $ site mvar
 
-site :: GHCISession -> Snap ()
+site :: MVar GHCISession -> Snap ()
 site session =
     route [ ("", serveDirectory "../client")
           , ("evaluate", method POST $ evalHandler session)
@@ -62,8 +64,8 @@ createTempFileHandle = IO.openTempFile "/tmp/" "live-haskell.hs" >>= return . sn
 openFileHandle :: FilePath -> IO (FilePath, Handle)
 openFileHandle fp = IO.openFile fp WriteMode >>= \h -> return (fp,h)
 
-evalHandler :: GHCISession -> Snap ()
-evalHandler session = do
+evalHandler :: MVar GHCISession -> Snap ()
+evalHandler mvar = do
   param'    <- getParam "script"
   filename' <- getParam "filename"
   (fp, h)   <- case filename' of
@@ -73,15 +75,15 @@ evalHandler session = do
   case param' of
     Nothing -> return ()
     Just param -> do
-      evalOutput <- liftIO $ writeAndLoad session (fp, h) param :: Snap EvalOutput
+      evalOutput <- liftIO $ writeAndLoad mvar (fp, h) param :: Snap EvalOutput
       writeJSON evalOutput
 
 
-commandHandler :: GHCISession -> Snap ()
-commandHandler session = do
+commandHandler :: MVar GHCISession -> Snap ()
+commandHandler mvar = do
   param' <- getParam "script"
   let param = BC.unpack . (Maybe.fromMaybe "main") $ param'
-  stmtResult <- liftIO $ runGHCI session $ runStmt param
+  stmtResult <- liftIO $ withMVar mvar $ \session -> (runGHCI session $ runStmt param)
   let evalOutput = decodeResult stmtResult
   writeJSON evalOutput
 
@@ -90,8 +92,8 @@ decodeResult res = case res of
   Left errs     -> EvalOutput "" "" $ Map.fromListWith (++) $ map (\(ErrorMessage _ line _ msg) -> (line, msg)) errs
   Right result  -> EvalOutput result "" Map.empty
 
-typeAtHandler :: GHCISession -> Snap ()
-typeAtHandler session = do
+typeAtHandler :: MVar GHCISession -> Snap ()
+typeAtHandler mvar = do
   filename'   <- getParam "filename"
   line_start' <- getParam "line_start"
   col_start'  <- getParam "col_start"
@@ -103,7 +105,7 @@ typeAtHandler session = do
       let typeAt = runTypeAt (BC.unpack filename) start end (BC.unpack text)
           start = (SrcLoc (read $ BC.unpack line_start) (read $ BC.unpack col_start))
           end = (SrcLoc (read $ BC.unpack line_end) (read $ BC.unpack col_end))
-      stmtResult <- liftIO $ runGHCI session typeAt
+      stmtResult <- liftIO $ withMVar mvar $ \session -> runGHCI session typeAt
       let evalOutput = decodeResult stmtResult
       writeJSON evalOutput
     _ -> return ()
@@ -123,14 +125,17 @@ openHandler =
   in
     getParam "filename" >>= liftIO . read . param >>= writeJSON
 
-openStackHandler :: GHCISession -> Snap ()
-openStackHandler session = do
+openStackHandler :: MVar GHCISession -> Snap ()
+openStackHandler mvar = do
+  oldsession <- liftIO $ takeMVar mvar
+  liftIO $ stopGHCI oldsession
   let param :: Maybe BS.ByteString -> BS.ByteString
       param p = Maybe.fromMaybe BS.empty p
       read :: BS.ByteString -> BS.ByteString -> IO OpenOutput
       read dp fp | BS.null dp = do
         (d,f,s) <- createNewProjectDirectory
-        runGHCI session (runCd d)
+        newsession <- startGHCI d
+        putMVar mvar newsession
         return $ FileContents d f s
                  | BS.null fp = return NoFilePathSupplied
                  | otherwise = do
@@ -148,7 +153,8 @@ openStackHandler session = do
                         case result of
                           Left ex -> return . OpenError $ ex
                           Right s -> do
-                            runGHCI session (runCd dp')
+                            newsession <- startGHCI dp'
+                            putMVar mvar newsession
                             return $ FileContents dp' fp' s
   filename' <- getParam $ "filename" :: Snap (Maybe BS.ByteString)
   filename  <- return . param $ filename'
@@ -156,13 +162,13 @@ openStackHandler session = do
   dirname   <- return . getDirpath $ filename
   liftIO (read dirname file) >>= writeJSON
 
-traceHandler :: GHCISession -> Snap ()
-traceHandler session = do
+traceHandler :: MVar GHCISession -> Snap ()
+traceHandler mvar = do
   param'    <- getParam "script"
   filename' <- getParam "filename"
   let param    = BC.unpack . (Maybe.fromMaybe "main") $ param' :: String
       filename = BC.unpack . (Maybe.fromMaybe "Main.hs") $ filename' :: FilePath
-      res   = runGHCI session $ runStmtWithTracing filename param :: IO (Either [ErrorMessage] ([TracingStep], String))
+      res   = withMVar mvar $ \session -> runGHCI session $ runStmtWithTracing filename param :: IO (Either [ErrorMessage] ([TracingStep], String))
       flatten :: Either [ErrorMessage] ([TracingStep], String) -> IO (Either [ErrorMessage] String)
       flatten (Left err) = return $ Left err
       flatten (Right (steps, s))  = return $ Right $ s ++ show steps
@@ -181,13 +187,13 @@ createNewProjectDirectory = do
 isStackProject :: FilePath -> IO Bool
 isStackProject fp = Dir.doesFileExist $ fp </> "stack.yaml"
 
-writeAndLoad :: GHCISession -> (FilePath, Handle) -> ByteString -> IO EvalOutput
-writeAndLoad session (filePath,h) script = do
+writeAndLoad :: MVar GHCISession -> (FilePath, Handle) -> ByteString -> IO EvalOutput
+writeAndLoad mvar (filePath,h) script = withMVar mvar $ \session -> do
   BS.hPut h script
   IO.hFlush h
   IO.hClose h
   res <- runGHCI session $ do
-    runLoad2 filePath -- runReload
+    runLoad filePath -- runReload
   return . decodeResult $ res
 
 data EvalOutput = EvalOutput {

@@ -13,10 +13,8 @@ module GHCIWrap(GHCISession,
                 runImport,
                 runAddBreakpoint,
                 runLoad,
-                runLoad2,
                 runReload,
                 runDeleteStar,
-                runCd,
                 extractBreakpoints,
                 runStmtWithTracing,
                 TracingStep(..)) where
@@ -173,7 +171,7 @@ splitBy [] _ = []
 splitBy list v = case span (/= v) list of
   ~(first, rest) -> first : case rest of
     [] -> []
-    (r:rs) -> splitBy rs v
+    (_:rs) -> splitBy rs v
 
 startGHCI :: FilePath -> IO GHCISession
 startGHCI targetDir = do
@@ -287,20 +285,14 @@ runAddBreakpoint expr = runGHCICommand_ (":break " ++ expr)
 runImport :: String -> GHCI ()
 runImport imp = runGHCICommand_ ("import " ++ imp)
 
-runLoad :: String -> GHCI ()
-runLoad file = runGHCICommand_ (":l \"" ++ file ++ "\"")
-
-runLoad2 :: String -> GHCI String
-runLoad2 file = runGHCICommand (":l \"" ++ file ++ "\"") >>= return . getStmtResult
+runLoad :: String -> GHCI String
+runLoad file = runGHCICommand (":l \"" ++ file ++ "\"") >>= return . getStmtResult
 
 runReload :: GHCI String
 runReload = runGHCICommand (":r") >>= return . getStmtResult
 
 runDeleteStar :: GHCI ()
 runDeleteStar = runGHCICommand_ ":delete *"
-
-runCd :: String -> GHCI ()
-runCd d = runGHCICommand_ (":cd " ++ d)
 
 extractBreakpoints :: FilePath -> IO (Either [ErrorMessage] (Set String))
 extractBreakpoints path = do
