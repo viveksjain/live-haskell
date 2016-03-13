@@ -53,6 +53,12 @@ safeRead def input = case reads input of
   [(v, [])] -> v
   _ -> def
 
+dropWhileAtMost :: (a -> Bool) -> Int -> [a] -> [a]
+dropWhileAtMost _ 0 x = x
+dropWhileAtMost _ _ [] = []
+dropWhileAtMost f n (x:xs) | f x = dropWhileAtMost f (n-1) xs
+                           | otherwise = (x:xs)
+
 parseOneError :: ErrorParser ErrorMessage
 parseOneError = do
   filename <- eatUntil ':'
@@ -66,7 +72,7 @@ parseOneError = do
           Nothing -> return []
           Just c | isSpace c -> do
             msg <- eatUntil '\n'
-            let msg' = dropWhile isSpace msg
+            let msg' = dropWhileAtMost isSpace 4 msg
             rest <- readLoop
             return $ msg' ++ '\n' : rest
           _ -> return []

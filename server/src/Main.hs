@@ -133,10 +133,11 @@ openStackHandler mvar = do
       param p = Maybe.fromMaybe BS.empty p
       read :: BS.ByteString -> BS.ByteString -> IO OpenOutput
       read dp fp | BS.null dp = do
-        (d,f,s) <- createNewProjectDirectory
-        newsession <- startGHCI d
-        putMVar mvar newsession
-        return $ FileContents d f s
+                    (d,f,s) <- createNewProjectDirectory
+                    newsession <- startGHCI d
+                    putMVar mvar newsession
+                    runGHCI newsession $ runLoad "app/Main.hs"
+                    return $ FileContents d f s
                  | BS.null fp = return NoFilePathSupplied
                  | otherwise = do
                     let dp' = BC.unpack dp :: FilePath
@@ -155,6 +156,7 @@ openStackHandler mvar = do
                           Right s -> do
                             newsession <- startGHCI dp'
                             putMVar mvar newsession
+                            runGHCI newsession $ runLoad (dp' </> fp')
                             return $ FileContents dp' fp' s
   filename' <- getParam $ "filename" :: Snap (Maybe BS.ByteString)
   filename  <- return . param $ filename'
@@ -198,7 +200,7 @@ writeAndLoad mvar (filePath,h) script = withMVar mvar $ \session -> do
   IO.hFlush h
   IO.hClose h
   res <- runGHCI session $ do
-    runReload
+    runLoad filePath -- runReload
   return . decodeResult $ res
 
 data EvalOutput = EvalOutput {

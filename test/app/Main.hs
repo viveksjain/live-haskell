@@ -16,5 +16,6 @@ add'' x = add x
 
 main = do
   writeFile "/tmp/foo" "bla"
+  print id
   print $ add 2 3 * add' 1 3 * add'' 0 1
 
