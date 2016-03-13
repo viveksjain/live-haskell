@@ -36,6 +36,7 @@ import Control.Exception hiding (handle)
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Writer.Strict
 import Control.Monad.Trans.Class
+import Data.Monoid
 
 import Data.Map.Strict(Map)
 import qualified Data.Map.Strict as M
@@ -309,15 +310,16 @@ startsWith (x:xs) (y:ys) | x == y = startsWith xs ys
 startsWith _ _ = False
 
 data TracingStep = TS { getPosition :: !(FilePath, Int), getVars :: !(Map String String) } deriving (Eq, Ord, Show, Read)
-data TracingResult = Stopped !TracingStep | Done !String deriving (Eq, Ord, Show, Read)
+data TracingResult = Stopped !TracingStep !String | Done !String deriving (Eq, Ord, Show, Read)
 
 parseTracingStep :: String -> TracingResult
-parseTracingStep step | not (startsWith step "Stopped at ") = Done step
-parseTracingStep step = Stopped $
+parseTracingStep step =
   let
-    stopped = head $ lines step
-    vars = tail $ lines step
-  in TS (parseStopped stopped) (M.fromList $ map parseOneResult vars)
+    (output, stoppedAndVars) = break (`startsWith` "Stopped at ") $ lines step
+  in
+   case stoppedAndVars of
+     [] -> Done (unlines output)
+     (stopped:vars) -> Stopped (TS (parseStopped stopped) (M.fromList $ map parseOneResult vars)) (unlines output)
   where
     parseStopped :: String -> (FilePath, Int)
     parseStopped line =
@@ -348,14 +350,14 @@ runStmtWithTracing filePath stmt = do
   breakpoints <- ioToGHCI $ extractBreakpoints (cwd </> filePath)
   liftIO $ putStrLn $ "Breakpoints: " ++ show breakpoints
   forM (S.toList breakpoints) runAddBreakpoint
-  let loop step = do
+  let loop step out = do
         output <- lift $ nextTracingCommand stmt step
         case parseTracingStep output of
-          Done res -> return res
-          Stopped map -> do
+          Done res -> return (out <> res)
+          Stopped map res -> do
             tell [map]
-            loop $ nextTracingState map
-  (res, map) <- runWriterT $ loop Init
+            loop (nextTracingState map) (out <> res)
+  (res, map) <- runWriterT $ loop Init mempty
   return (map, res)
   where
     nextTracingCommand :: String -> TracingCmd -> GHCI String
