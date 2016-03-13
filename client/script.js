@@ -42,7 +42,7 @@ function Refresher(live_haskell) {
     that._setRefreshable(true);
   });
   this._$icon.click(function(ev) {
-    live_haskell.evaluateInput();
+    live_haskell.traceInput();
   })
 }
 
@@ -67,6 +67,7 @@ Refresher.prototype.setRefreshing = function(isRefreshing) {
 
 function Commander(live_haskell) {
   this._ace = createEditor('command');
+  live_haskell.setCommander(this);
   // Based on http://stackoverflow.com/a/32316070
   this._ace.setOptions({
     maxLines: 1,
@@ -89,7 +90,11 @@ function Commander(live_haskell) {
 
   var that = this;
   this._ace.commands.bindKey('Enter|Shift-Enter|Alt-Enter', function(editor) {
-    live_haskell.trace(editor.getValue());
+    live_haskell.traceInput();
   });
   this._ace.setValue('main', 1);
 }
+
+Commander.prototype.getInput = function(first_argument) {
+  return this._ace.getValue();
+};

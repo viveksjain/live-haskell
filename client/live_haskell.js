@@ -47,7 +47,7 @@ LiveHaskell.prototype.setFilename = function(filename) {
 
 LiveHaskell.prototype.setInput = function(contents) {
   this._editor.setValue(contents, 1);
-  this.evaluateInput();
+  this.traceInput();
 }
 
 LiveHaskell.prototype.setOutput = function(contents) {
@@ -72,7 +72,7 @@ LiveHaskell.prototype.enable = function(file_selector) {
 
     var that = this;
     var debounced = debounce(function() {
-      that.evaluateInput();
+      that.traceInput();
     }, 300, {
       leading: true,
       trailing: true,
@@ -91,16 +91,36 @@ LiveHaskell.prototype.enable = function(file_selector) {
     $(document).keydown(function(ev) {
       if (ev.which == 13 && (ev.metaKey || ev.ctrlKey)) {
         ev.preventDefault();
-        that.evaluateInput();
+        that.traceInput();
       }
     });
   }
 }
 
-LiveHaskell.prototype.evaluateInput = function(cb) {
+LiveHaskell.prototype.traceInput = function() {
+  var that = this;
+  this._reloadInput(function(isReloaded, hasErrors) {
+    if (hasErrors) return;
+    var command = that._commander.getInput();
+    if (!isReloaded && that._evaluatedCommand == command) {
+      console.log('Command already evaluated');
+    }
+    that._evaluatedCommand = command;
+    $.post('trace', {
+      filename: that._filename,
+      script: that._evaluatedCommand,
+    }, function(result) {
+      console.log(result);
+    });
+  });
+}
+
+// `cb` is passed whether the input was reloaded, and whether the input has
+// errors.
+LiveHaskell.prototype._reloadInput = function(cb) {
   if (!this.isOutputChanged()) {
     console.log('Output already up-to-date');
-    if (cb) cb();
+    if (cb) cb(false, this._hadErrors);
     return;
   }
   var editCount = this._editCounter;
@@ -126,17 +146,14 @@ LiveHaskell.prototype.evaluateInput = function(cb) {
       }
     }
     that._editor.session.setAnnotations(aceErrors);
-    if (cb) cb();
+    that._hadErrors = aceErrors.length != 0;
+    if (cb) cb(true, that._hadErrors);
   });
-}
-
-LiveHaskell.prototype.trace = function(cmd) {
-  console.log(cmd);
 }
 
 LiveHaskell.prototype.getType = function () {
   var that = this;
-  this.evaluateInput(function() {
+  this._reloadInput(function() {
     var range;
     var hasSelection;
     if (that._editor.getSelection().isEmpty()) {
@@ -170,6 +187,10 @@ LiveHaskell.prototype.getType = function () {
 
 LiveHaskell.prototype.setRefresher = function(refresher) {
   this._refresher = refresher;
+}
+
+LiveHaskell.prototype.setCommander = function(commander) {
+  this._commander = commander;
 }
 
 LiveHaskell.prototype.onChange = function(cb) {
