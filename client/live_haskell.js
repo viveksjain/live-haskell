@@ -61,6 +61,15 @@ LiveHaskell.prototype.enable = function(file_selector) {
     this._isEnabled = true;
     file_selector.hide();
     $('#live_haskell').show();
+
+    if (!localStorage.seen) {
+      try {
+        // Fails in Safari private browsing mode
+        localStorage.seen = true;
+      } catch (e) {}
+      show_help();
+    }
+
     var that = this;
     var debounced = debounce(function() {
       that.evaluateInput();

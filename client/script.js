@@ -16,7 +16,10 @@ function FileSelector(live_haskell) {
     // });
 
     // On success
-    localStorage.filename = filename;
+    try {
+      // Fails in Safari private browsing mode
+      localStorage.filename = filename;
+    } catch(e) {}
     live_haskell.setFilename(filename);
     var contents = "-- Type here and it will get evaluated when you press enter (careful, make sure\n-- you don't execute any potentially dangerous code!)\nmain' :: String\nmain' = \"Hello world\"\ntest = map (+)";
     live_haskell.setInput(contents);

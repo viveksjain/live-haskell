@@ -8,9 +8,4 @@ $(document).ready(function () {
   new Commander(live_haskell);
 
   $('#help').click(show_help);
-
-  if (!localStorage.seen) {
-    localStorage.seen = true;
-    show_help();
-  }
 });
