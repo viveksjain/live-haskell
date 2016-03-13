@@ -25,7 +25,7 @@ library
 Executable server
   hs-source-dirs: src
   main-is: Main.hs
-  other-modules: GHCIWrap, ErrorParser, HsParser, MiniHsParser
+  other-modules: GHCIWrap, ErrorParser, HsParser, MiniHsParser, SystemPathCopy
 
   build-depends:
     base                      >= 4     && < 5,
