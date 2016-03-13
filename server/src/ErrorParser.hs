@@ -48,11 +48,16 @@ peekNextChar = ErrorParser $ \s -> case s of
   [] -> Just (Nothing, [])
   (x:xs) -> Just (Just x, x:xs)
 
+safeRead :: Read a => a -> String -> a
+safeRead def input = case reads input of
+  [(v, [])] -> v
+  _ -> def
+
 parseOneError :: ErrorParser ErrorMessage
 parseOneError = do
   filename <- eatUntil ':'
-  line <- fmap read (eatUntil ':')
-  col <- fmap read (eatUntil ':')
+  line <- fmap (safeRead 0) (eatUntil ':')
+  col <- fmap (safeRead 0) (eatUntil ':')
   msg1 <- eatUntil '\n'
   let msg1' = dropWhile isSpace msg1
   let readLoop = do
