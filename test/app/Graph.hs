@@ -4,7 +4,6 @@ import Data.Map.Strict(Map)
 import qualified Data.Map.Strict as M
 import Data.Maybe
 import Data.List
-import Debug.Trace
 
 type Vertex = Int
 data Edge = Edge !Vertex !Vertex deriving (Eq, Ord, Show, Read)

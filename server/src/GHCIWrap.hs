@@ -238,7 +238,7 @@ prepareToRunStmt stmt = do
   type_ <- runType "it"
   return $ case extractMainType type_ of
     mainType | startsWith mainType "TIO" -> TIO
-             | startsWith mainType "IO" -> Reject
+             | startsWith mainType "IO" -> TIO
              | startsWith mainType "GHC.Types.IO" -> Reject
              | otherwise -> PureFunction
 
