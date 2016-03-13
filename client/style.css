@@ -95,23 +95,40 @@ body, #file_selector_container * {
 #live_haskell > div {
   width: 50%;
   position: absolute;
+}
+
+#live_haskell > div:not(.bottom) {
   top: 0;
+}
+
+.bottom {
   bottom: 0;
 }
 
-#output, #refresh {
-  left: 50%;
+#editor {
+  bottom: 19px;
 }
 
-#refresh {
+#prompt_gt {
+  float: left;
+  font-family: Monaco, Menlo, 'Ubuntu Mono', Consolas, source-code-pro, monospace;
+  font-size:  14px;
+}
+
+#output, #output_overlay {
+  left: 50%;
+  bottom: 0;
+}
+
+#output_overlay {
   pointer-events: none;
 }
 
-#refresh.refreshable {
+#output_overlay.refreshable {
   background-color: rgba(0, 0, 0, 0.2);
 }
 
-#refresh_icon {
+#output_overlay_icon {
   pointer-events: all;
   position: absolute;
   right: 12px;
@@ -121,13 +138,13 @@ body, #file_selector_container * {
   cursor: pointer;
 }
 
-#refresh.refreshable #refresh_icon:not(.rotating) {
+#output_overlay.refreshable #output_overlay_icon:not(.rotating) {
   fill: #467FFE;
   -webkit-filter: drop-shadow(0 1px 8px #467FFE);
   -moz-filter: drop-shadow(0 1px 8px #467FFE);
   filter: drop-shadow(0 1px 8px #467FFE);
 }
 
-#refresh.refreshable #refresh_icon.rotating, #refresh #refresh_icon {
+#output_overlay.refreshable #output_overlay_icon.rotating, #output_overlay #output_overlay_icon {
   fill: #7B7B7B;
 }

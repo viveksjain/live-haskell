@@ -10,7 +10,7 @@ function Tooltip($elem, text, lh_editor) {
 
   this._listeners = {};
   // Remove leading and trailing whitespace
-  text = text.replace(/^\s*/, '').replace(/\s*$/, '');
+  text = text.replace(/^\s*|\s*$/g, '');
   // Make sure we exclude tooltips (since they contain ace as well) from
   // selection.
   var $elem = $elem.filter(function() {

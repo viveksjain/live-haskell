@@ -1,9 +1,10 @@
 function LiveHaskell() {
   this._editor = createEditor('editor');
-  this._editor.setTheme('ace/theme/monokai');
-  this._editor.session.setMode('ace/mode/haskell');
-  this._editor.session.setTabSize(2);
-  this._editor.setOptions({enableBasicAutocompletion: true,});
+  this._editor.setOptions({
+    theme: 'ace/theme/monokai',
+    mode: 'ace/mode/haskell',
+    enableBasicAutocompletion: true,
+  });
   this._editCounter = 0;
   var that = this;
   this.onChange(function(ev) {
@@ -120,6 +121,10 @@ LiveHaskell.prototype.evaluateInput = function(cb) {
   });
 }
 
+LiveHaskell.prototype.trace = function(cmd) {
+  console.log(cmd);
+}
+
 LiveHaskell.prototype.getType = function () {
   var that = this;
   this.evaluateInput(function() {
@@ -134,7 +139,7 @@ LiveHaskell.prototype.getType = function () {
     }
 
     $.post('type-at', {
-      filename: this._filename,
+      filename: this._filename || '',
       line_start: range.start.row + 1,  // 0 indexed
       col_start: range.start.column,
       line_end: range.end.row + 1,

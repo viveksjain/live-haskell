@@ -26,7 +26,7 @@ FileSelector.prototype.hide = function() {
 
 function Refresher(live_haskell) {
   live_haskell.setRefresher(this);
-  this._$elem = $('#refresh');
+  this._$elem = $('#output_overlay');
   this._$icon = $('#refresh_icon');
   this._live_haskell = live_haskell;
 
@@ -57,3 +57,32 @@ Refresher.prototype.setRefreshing = function(isRefreshing) {
     }
   }
 };
+
+function Commander(live_haskell) {
+  this._ace = createEditor('command');
+  // Based on http://stackoverflow.com/a/32316070
+  this._ace.setOptions({
+    maxLines: 1,
+    highlightActiveLine: false,
+    showGutter: false,
+    mode: 'ace/mode/haskell',
+    theme: 'ace/theme/xcode',
+    printMargin: false,
+  });
+  this._ace.on('paste', function(ev) {
+    ev.text = ev.text.replace(/[\r\n]+/g, " ");
+  });
+  this._ace.renderer.screenToTextCoordinates = function(x, y) {
+    var pos = this.pixelToScreenCoordinates(x, y);
+    return this.session.screenToDocumentPosition(
+      Math.min(this.session.getScreenLength() - 1, Math.max(pos.row, 0)),
+      Math.max(pos.column, 0)
+    );
+  };
+
+  var that = this;
+  this._ace.commands.bindKey('Enter|Shift-Enter|Alt-Enter', function(editor) {
+    live_haskell.trace(editor.getValue());
+  });
+  this._ace.setValue('main', 1);
+}

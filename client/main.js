@@ -5,4 +5,5 @@ $(document).ready(function () {
   live_haskell = new LiveHaskell();
   new FileSelector(live_haskell);
   new Refresher(live_haskell);
+  new Commander(live_haskell);
 });
