@@ -6,4 +6,11 @@ $(document).ready(function () {
   new FileSelector(live_haskell);
   new Refresher(live_haskell);
   new Commander(live_haskell);
+
+  $('#help').click(show_help);
+
+  if (!localStorage.seen) {
+    localStorage.seen = true;
+    show_help();
+  }
 });

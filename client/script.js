@@ -1,3 +1,6 @@
+function show_help() {
+}
+
 function FileSelector(live_haskell) {
   var that = this;
   if (localStorage.filename) {

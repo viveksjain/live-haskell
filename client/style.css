@@ -47,16 +47,19 @@ body, #file_selector_container * {
   border-bottom-color: white;
 }
 
+button {
+  border: none;
+  cursor: pointer;
+  color: white;
+  line-height: 2.5;
+  padding: 0 15px;
+}
+
 #form_submit {
   margin-top: 10px;
   width: 100%;
   font-size: 20px;
-  line-height: 2.5;
-  padding: 1px 15px;
   background-color: #197708;
-  border: none;
-  color: white;
-  cursor: pointer;
 }
 
 #form_submit:hover {
@@ -122,13 +125,14 @@ body, #file_selector_container * {
 
 #output_overlay {
   pointer-events: none;
+  z-index: 1;
 }
 
 #output_overlay.refreshable {
   background-color: rgba(0, 0, 0, 0.2);
 }
 
-#output_overlay_icon {
+#refresh_icon {
   pointer-events: all;
   position: absolute;
   right: 12px;
@@ -138,13 +142,30 @@ body, #file_selector_container * {
   cursor: pointer;
 }
 
-#output_overlay.refreshable #output_overlay_icon:not(.rotating) {
+#output_overlay.refreshable #refresh_icon:not(.rotating) {
   fill: #467FFE;
   -webkit-filter: drop-shadow(0 1px 8px #467FFE);
   -moz-filter: drop-shadow(0 1px 8px #467FFE);
   filter: drop-shadow(0 1px 8px #467FFE);
 }
 
-#output_overlay.refreshable #output_overlay_icon.rotating, #output_overlay #output_overlay_icon {
+#output_overlay.refreshable #refresh_icon.rotating, #output_overlay #refresh_icon {
   fill: #7B7B7B;
+}
+
+#command_container {
+  border-right: 1px solid #272822;
+}
+
+#help {
+  pointer-events: all;
+  background-color: #376EFF;
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+  font-style: 14px;
+}
+
+#help:hover {
+  background-color: #37AAFF;
 }
