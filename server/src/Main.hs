@@ -198,7 +198,7 @@ writeAndLoad mvar (filePath,h) script = withMVar mvar $ \session -> do
   IO.hFlush h
   IO.hClose h
   res <- runGHCI session $ do
-    runLoad filePath -- runReload
+    runReload
   return . decodeResult $ res
 
 data EvalOutput = EvalOutput {
