@@ -1,4 +1,5 @@
 function show_help() {
+  $('body').chardinJs('start');
 }
 
 function FileSelector(live_haskell) {

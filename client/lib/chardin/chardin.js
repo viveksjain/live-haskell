@@ -132,6 +132,14 @@
             target_height = target_element_position.height;
             my_height = $(tooltip_layer).height();
             tooltip_layer.style.top = "" + ((target_height / 2) - (tooltip_layer_position.height / 2)) + "px";
+          case "on":
+            target_element_position = this._get_offset(element);
+            target_width = target_element_position.width;
+            my_width = $(tooltip_layer).width();
+            tooltip_layer.style.left = "" + ((target_width / 2) - (tooltip_layer_position.width / 2)) + "px";
+            target_height = target_element_position.height;
+            my_height = $(tooltip_layer).height();
+            tooltip_layer.style.top = "" + ((target_height / 2) - (tooltip_layer_position.height / 2)) + "px";
         }
         switch (this._get_position(element)) {
           case "left":
@@ -170,7 +178,9 @@
         tooltip_layer.innerHTML = "<div class='chardinjs-tooltiptext'>" + (element.getAttribute('data-intro')) + "</div>";
         helper_layer.appendChild(tooltip_layer);
         this._place_tooltip(element);
-        element.className += " chardinjs-show-element";
+        if (this._get_position(element) != 'on') {
+          element.className += " chardinjs-show-element";
+        }
         current_element_position = "";
         if (element.currentStyle) {
           current_element_position = element.currentStyle["position"];
