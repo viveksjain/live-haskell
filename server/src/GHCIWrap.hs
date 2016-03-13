@@ -26,6 +26,7 @@ import System.Exit
 import System.IO hiding (stdin, stdout, stderr)
 import System.IO.Error
 import System.Directory(getCurrentDirectory, getHomeDirectory)
+import System.Environment(lookupEnv)
 import System.FilePath((</>))
 import Data.Char
 import Text.Regex
@@ -167,17 +168,28 @@ checkExc f e = case f e of
   True -> Just e
   False -> Nothing
 
+splitBy :: Eq a => [a] -> a -> [[a]]
+splitBy [] _ = []
+splitBy list v = case span (/= v) list of
+  ~(first, rest) -> first : case rest of
+    [] -> []
+    (r:rs) -> splitBy rs v
+
 startGHCI :: FilePath -> IO GHCISession
 startGHCI targetDir = do
   cwd <- getCurrentDirectory
   home <- getHomeDirectory
-  let args = ["exec", "ghci-ng", "--", "-XSafe", "-XNoImplicitPrelude",
-              "-package-db", cwd </> ".stack-work/install/x86_64-linux/lts-5.1/7.10.3/pkgdb",
-              "-package-db", home </> ".stack/snapshots/x86_64-linux/lts-5.1/7.10.3/pkgdb"]
+  maybeHaskellPkgSandboxes <- lookupEnv "HASKELL_PACKAGE_SANDBOXES"
+  let pkgdb = concatMap (\x -> ["-package-db", x]) $ case maybeHaskellPkgSandboxes of
+        Just v -> filter (not . null) $ splitBy v ':'
+        Nothing -> [cwd </> ".stack-work/install/x86_64-linux/lts-5.1/7.10.3/pkgdb",
+                    home </> ".stack/snapshots/x86_64-linux/lts-5.1/7.10.3/pkgdb"]
+      args = ["exec", "ghci-ng", "--", "-XSafe", "-XNoImplicitPrelude"] ++ pkgdb
       process = (proc' "stack" args) { std_in = CreatePipe,
                                        std_out = CreatePipe,
                                        std_err = CreatePipe,
                                        cwd = Just targetDir }
+  -- print pkgdb
   (Just stdin, Just stdout, Just stderr, handle) <- createProcess process
   hSetBuffering stdin LineBuffering
   hSetBuffering stdout NoBuffering
