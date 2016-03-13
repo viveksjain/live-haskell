@@ -11,7 +11,7 @@ function FileSelector(liveHaskell) {
     ev.preventDefault();
 
     var filename = $('#form_filename').val();
-    $.post('open', {filename: filename}, function (result) {
+    $.post('open', {filename: filename}, function(result) {
       // TODO handle errors
       console.log(result);
       // On success

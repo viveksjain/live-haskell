@@ -1,6 +1,6 @@
 var DEBUG = false;
 
-$(document).ready(function () {
+$(document).ready(function() {
   // Purposely a global to allow for easier debugging.
   liveHaskell = new LiveHaskell();
   new FileSelector(liveHaskell);

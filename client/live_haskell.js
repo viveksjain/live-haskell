@@ -13,7 +13,7 @@ function LiveHaskell() {
   this._editor.commands.addCommand({
     name: 'getType',
     bindKey: {win: 'Ctrl-Alt-;', mac: 'Command-Option-;'},
-    exec: function (editor) {
+    exec: function(editor) {
       that.getType();
     }
   });
@@ -152,7 +152,7 @@ LiveHaskell.prototype._reloadInput = function(cb) {
   });
 }
 
-LiveHaskell.prototype.getType = function () {
+LiveHaskell.prototype.getType = function() {
   var that = this;
   this._reloadInput(function() {
     var range;
@@ -172,7 +172,7 @@ LiveHaskell.prototype.getType = function () {
       line_end: range.end.row + 1,
       col_end: range.end.column,
       text: that._editor.session.getTextRange(range),
-    }, function (result) {
+    }, function(result) {
       console.log(result);
       // TODO check for errs
       var $elem;
