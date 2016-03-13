@@ -22,7 +22,6 @@ function FileSelector(live_haskell) {
       live_haskell.setFilename(filename);
       live_haskell.setInput(result.details);
       live_haskell.enable(that);
-      live_haskell.setFilename(file);
     });
 
   });

@@ -41,7 +41,7 @@ main = bracket (startGHCI "../test") stopGHCI $ \initialSession -> do
 site :: MVar GHCISession -> Snap ()
 site session =
     route [ ("", serveDirectory "../client")
-          , ("evaluate", method POST $ evalHandler session)
+          , ("reload", method POST $ reloadHandler session)
           , ("type-at", method POST $ typeAtHandler session)
           , ("command", method POST $ commandHandler session)
           --, ("open", method POST $ openHandler)
@@ -64,8 +64,8 @@ createTempFileHandle = IO.openTempFile "/tmp/" "live-haskell.hs" >>= return . sn
 openFileHandle :: FilePath -> IO (FilePath, Handle)
 openFileHandle fp = IO.openFile fp WriteMode >>= \h -> return (fp,h)
 
-evalHandler :: MVar GHCISession -> Snap ()
-evalHandler mvar = do
+reloadHandler :: MVar GHCISession -> Snap ()
+reloadHandler mvar = do
   param'    <- getParam "script"
   filename' <- getParam "filename"
   (fp, h)   <- case filename' of

@@ -106,7 +106,7 @@ LiveHaskell.prototype.evaluateInput = function(cb) {
   var editCount = this._editCounter;
   this._refresher.setRefreshing(true);
   var that = this;
-  $.post('evaluate', {
+  $.post('reload', {
     filename: this._filename,
     script: this._editor.getValue(),
   }, function(result) {
