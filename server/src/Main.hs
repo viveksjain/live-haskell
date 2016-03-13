@@ -45,6 +45,7 @@ site session =
           , ("open", method POST $ openHandler)
           -- , ("openStack/:dirname/:filename", openStackHandler session) --for testing only
           , ("openStack", method POST $ openStackHandler session)
+          , ("trace", method POST $ traceHandler session)
           , ("foo", writeBS "bar")
           , ("echo/:echoparam", echoHandler)
           ]
@@ -72,7 +73,7 @@ evalHandler session = do
   case param' of
     Nothing -> return ()
     Just param -> do
-      evalOutput <- liftIO $ run session (fp, h) param :: Snap EvalOutput
+      evalOutput <- liftIO $ writeAndLoad session (fp, h) param :: Snap EvalOutput
       writeJSON evalOutput
 
 
@@ -154,6 +155,19 @@ openStackHandler session = do
   dirname   <- return . param $ dirname'
   liftIO (read dirname filename) >>= writeJSON
 
+traceHandler :: GHCISession -> Snap ()
+traceHandler session = do
+  param'    <- getParam "script"
+  filename' <- getParam "filename"
+  let param    = BC.unpack . (Maybe.fromMaybe "main") $ param' :: String
+      filename = BC.unpack . (Maybe.fromMaybe "Main.hs") $ filename' :: FilePath
+      res   = runGHCI session $ runStmtWithTracing filename param :: IO (Either [ErrorMessage] ([TracingStep], String))
+      flatten :: Either [ErrorMessage] ([TracingStep], String) -> IO (Either [ErrorMessage] String)
+      flatten (Left err) = return $ Left err
+      flatten (Right (steps, s))  = return $ Right $ s ++ show steps
+  stmtResult <- liftIO $ res >>= flatten
+  writeJSON . decodeResult $ stmtResult
+
 createNewProjectDirectory :: IO (FilePath, FilePath, String)
 createNewProjectDirectory = do
   cwd <- Dir.getCurrentDirectory
@@ -166,8 +180,8 @@ createNewProjectDirectory = do
 isStackProject :: FilePath -> IO Bool
 isStackProject fp = Dir.doesFileExist $ fp </> "stack.yaml"
 
-run :: GHCISession -> (FilePath, Handle) -> ByteString -> IO EvalOutput
-run session (filePath,h) script = do
+writeAndLoad :: GHCISession -> (FilePath, Handle) -> ByteString -> IO EvalOutput
+writeAndLoad session (filePath,h) script = do
   BS.hPut h script
   IO.hFlush h
   IO.hClose h
@@ -180,6 +194,7 @@ data EvalOutput = EvalOutput {
   error :: String,          -- from std err
   errors :: Map Int String  -- map from line numbers to error messages
 }
+
 
 instance ToJSON EvalOutput where
   toJSON (EvalOutput out err errs) = object ["output" .= out, "error" .= err, "errors" .= errs]
@@ -194,7 +209,7 @@ instance ToJSON OpenOutput where
   toJSON (NoFilePathSupplied)  = object ["endpoint" .= s2j "/open", "status" .= s2j "error", "details" .= s2j "no file path supplied by user"]
   toJSON (NotStackProject)  = object ["endpoint" .= s2j "/open", "status" .= s2j "error", "details" .= s2j "not a stack project"]
   toJSON (OpenError errorMessage)  = object ["endpoint" .= s2j "/open", "status" .= s2j "error", "details" .= show errorMessage]
-  toJSON (FileContents dir file fileContents) = object ["endpoint" .= s2j "/open", "status" .= s2j "success", "details" .= fileContents, "dir" .= dir, "file" .= file]
+  toJSON (FileContents dirpath file fileContents) = object ["endpoint" .= s2j "/open", "status" .= s2j "success", "details" .= fileContents, "dir" .= dirpath, "file" .= file]
 
 stringToJSON :: String -> Value
 stringToJSON s = String . Text.pack $ s
