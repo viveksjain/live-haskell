@@ -42,9 +42,9 @@ site session =
           , ("evaluate", method POST $ evalHandler session)
           , ("type-at", method POST $ typeAtHandler session)
           , ("command", method POST $ commandHandler session)
-          , ("open", method POST $ openHandler)
+          --, ("open", method POST $ openHandler)
           -- , ("openStack/:dirname/:filename", openStackHandler session) --for testing only
-          , ("openStack", method POST $ openStackHandler session)
+          , ("open", method POST $ openStackHandler session)
           , ("trace", method POST $ traceHandler session)
           , ("foo", writeBS "bar")
           , ("echo/:echoparam", echoHandler)
@@ -92,14 +92,15 @@ decodeResult res = case res of
 
 typeAtHandler :: GHCISession -> Snap ()
 typeAtHandler session = do
+  filename'   <- getParam "filename"
   line_start' <- getParam "line_start"
   col_start'  <- getParam "col_start"
   line_end'   <- getParam "line_end"
   col_end'    <- getParam "col_end"
   text'       <- getParam "text"
-  case (line_start', col_start', line_end', col_end', text') of
-    (Just line_start, Just col_start, Just line_end, Just col_end, Just text) -> do
-      let typeAt = runTypeAt "/tmp/test.hs" start end (BC.unpack text)
+  case (filename', line_start', col_start', line_end', col_end', text') of
+    (Just filename, Just line_start, Just col_start, Just line_end, Just col_end, Just text) -> do
+      let typeAt = runTypeAt (BC.unpack filename) start end (BC.unpack text)
           start = (SrcLoc (read $ BC.unpack line_start) (read $ BC.unpack col_start))
           end = (SrcLoc (read $ BC.unpack line_end) (read $ BC.unpack col_end))
       stmtResult <- liftIO $ runGHCI session typeAt
