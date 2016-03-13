@@ -2,6 +2,7 @@
 
 module System.TIO(TIO,
                   runTIO,
+                  wipeSandbox,
                   IOMode(..),
                   BufferMode(..),
                   SeekMode(..),
@@ -63,7 +64,7 @@ import System.IO.Unsafe(unsafePerformIO)
 import System.IO.Error(isAlreadyExistsError, isDoesNotExistError)
 
 import System.Posix.Directory(getWorkingDirectory, createDirectory)
-import System.Posix.Types(FileMode)
+import System.Directory(removeDirectoryRecursive)
 import System.Posix.Files(fileExist)
 import System.Posix.Process(getProcessID)
 import Foreign.ForeignPtr(mallocForeignPtrBytes,withForeignPtr)
@@ -80,6 +81,11 @@ sandboxPath = unsafePerformIO $ do
   let path = dir </> (".sandbox-tio-" ++ show pid)
   tryJust (guard . isAlreadyExistsError) (createDirectory path 0o700)
   return path
+
+wipeSandbox :: IO ()
+wipeSandbox = void $ do
+  removeDirectoryRecursive sandboxPath
+  tryJust (guard . isAlreadyExistsError) (createDirectory sandboxPath 0o700)
 
 data Handle = Handle !FilePath !S.Handle deriving (Eq, Show)
 

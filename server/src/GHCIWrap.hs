@@ -206,11 +206,9 @@ startGHCI targetDir = do
     let preludedir = cwd </> "prelude"
     runGHCICommand_ $ ":set \"-i" ++ preludedir ++ "\""
     runGHCICommand_ $ ":l \"" ++ (preludedir </> "Prelude.hs") ++ "\""
-    runGHCICommand_ $ ":l \"" ++ (preludedir </> "System/IO.hs") ++ "\""
-    runGHCICommand_ $ ":l \"" ++ (preludedir </> "Data/IORef.hs") ++ "\""
-    runGHCICommand_ $ ":l \"" ++ (preludedir </> "Data/Array/IO.hs") ++ "\""
     runGHCICommand_ ":set -XImplicitPrelude"
     runGHCICommand_ ":set -main-is Prelude.hiddenDummyMain"
+    runGHCICommand_ "import qualified System.TIO"
   return session
 
 stopGHCI :: GHCISession -> IO ExitCode
@@ -234,6 +232,7 @@ data ExecStyle = PureFunction | TIO | Reject
 
 prepareToRunStmt :: String -> GHCI ExecStyle
 prepareToRunStmt stmt = do
+  runGHCICommand_ "System.TIO.wipeSandbox"
   runGHCICommand_ $ "let it = (" ++ stmt ++ ")"
   type_ <- runType "it"
   return $ case extractMainType type_ of
