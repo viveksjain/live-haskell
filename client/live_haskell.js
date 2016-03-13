@@ -148,7 +148,7 @@ LiveHaskell.prototype.getType = function () {
     }
 
     $.post('type-at', {
-      filename: this._filename || '',
+      filename: that._filename || '',
       line_start: range.start.row + 1,  // 0 indexed
       col_start: range.start.column,
       line_end: range.end.row + 1,
