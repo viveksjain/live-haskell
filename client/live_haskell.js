@@ -104,6 +104,7 @@ LiveHaskell.prototype.traceInput = function() {
     var command = that._commander.getInput();
     if (!isReloaded && that._evaluatedCommand == command) {
       console.log('Command already evaluated');
+      return;
     }
     that._evaluatedCommand = command;
     $.post('trace', {

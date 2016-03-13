@@ -91,6 +91,7 @@ function Commander(liveHaskell) {
   var that = this;
   this._ace.commands.bindKey('Enter|Shift-Enter|Alt-Enter', function(editor) {
     liveHaskell.traceInput();
+    that._ace.blur();
   });
   this._ace.setValue('main', 1);
 }
