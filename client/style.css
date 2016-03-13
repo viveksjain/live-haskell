@@ -186,3 +186,7 @@ body .chardinjs-tooltip {
 body .chardinjs-tooltip.chardinjs-left {
   margin-left: -175px;
 }
+
+.chardinjs-tooltiptext {
+  white-space: pre-wrap;
+}
