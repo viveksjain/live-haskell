@@ -2,10 +2,10 @@ var DEBUG = false;
 
 $(document).ready(function () {
   // Purposely a global to allow for easier debugging.
-  live_haskell = new LiveHaskell();
-  new FileSelector(live_haskell);
-  new Refresher(live_haskell);
-  new Commander(live_haskell);
+  liveHaskell = new LiveHaskell();
+  new FileSelector(liveHaskell);
+  new Refresher(liveHaskell);
+  new Commander(liveHaskell);
 
-  $('#help').click(show_help);
+  $('#help').click(showHelp);
 });

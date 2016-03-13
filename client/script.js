@@ -1,8 +1,8 @@
-function show_help() {
+function showHelp() {
   $('body').chardinJs('start');
 }
 
-function FileSelector(live_haskell) {
+function FileSelector(liveHaskell) {
   if (localStorage.filename) {
     $('#form_filename').val(localStorage.filename);
   }
@@ -19,9 +19,9 @@ function FileSelector(live_haskell) {
         // Fails in Safari private browsing mode
         localStorage.filename = filename;
       } catch(e) {}
-      live_haskell.setFilename(filename);
-      live_haskell.setInput(result.details);
-      live_haskell.enable(that);
+      liveHaskell.setFilename(filename);
+      liveHaskell.setInput(result.details);
+      liveHaskell.enable(that);
     });
 
   });
@@ -31,18 +31,18 @@ FileSelector.prototype.hide = function() {
   $('#file_selector_container').hide();
 }
 
-function Refresher(live_haskell) {
-  live_haskell.setRefresher(this);
+function Refresher(liveHaskell) {
+  liveHaskell.setRefresher(this);
   this._$elem = $('#output_overlay');
   this._$icon = $('#refresh_icon');
-  this._live_haskell = live_haskell;
+  this._liveHaskell = liveHaskell;
 
   var that = this;
-  live_haskell.onChange(function(ev) {
+  liveHaskell.onChange(function(ev) {
     that._setRefreshable(true);
   });
   this._$icon.click(function(ev) {
-    live_haskell.traceInput();
+    liveHaskell.traceInput();
   })
 }
 
@@ -59,15 +59,15 @@ Refresher.prototype.setRefreshing = function(isRefreshing) {
     this._$icon.addClass('rotating');
   } else {
     this._$icon.removeClass('rotating');
-    if (!this._live_haskell.isOutputChanged()) {
+    if (!this._liveHaskell.isOutputChanged()) {
       this._setRefreshable(false);
     }
   }
 };
 
-function Commander(live_haskell) {
+function Commander(liveHaskell) {
   this._ace = createEditor('command');
-  live_haskell.setCommander(this);
+  liveHaskell.setCommander(this);
   // Based on http://stackoverflow.com/a/32316070
   this._ace.setOptions({
     maxLines: 1,
@@ -90,11 +90,11 @@ function Commander(live_haskell) {
 
   var that = this;
   this._ace.commands.bindKey('Enter|Shift-Enter|Alt-Enter', function(editor) {
-    live_haskell.traceInput();
+    liveHaskell.traceInput();
   });
   this._ace.setValue('main', 1);
 }
 
-Commander.prototype.getInput = function(first_argument) {
+Commander.prototype.getInput = function() {
   return this._ace.getValue();
 };

@@ -3,7 +3,7 @@ var _tooltip = null;
 // close the tooltip.
 var TOOLTIP_DISTANCE = 100;
 
-function Tooltip($elem, text, lh_editor) {
+function Tooltip($elem, text, lhEditor) {
   if (_tooltip != null) {
     _tooltip.destroy();
   }
@@ -16,7 +16,7 @@ function Tooltip($elem, text, lh_editor) {
   var $elem = $elem.filter(function() {
     return $(this).closest('.type_tooltip').length == 0;
   });
-  this._lh_editor = lh_editor;
+  this._lhEditor = lhEditor;
   var that = _tooltip = this;
   this._tooltip = $elem.qtip({
     content: {text: '<div class="type_tooltip_ace"></div>'},
@@ -82,7 +82,7 @@ Tooltip.prototype._createAce = function(text) {
 
     var renderListener = that._genRenderListener();
     that._listeners.render = renderListener;
-    that._lh_editor.renderer.on('afterRender', renderListener);
+    that._lhEditor.renderer.on('afterRender', renderListener);
   });
 }
 
@@ -96,7 +96,7 @@ Tooltip.prototype._isOutsideWindow = function(checkBelowOnly) {
 // Somewhat hacky, but due to Ace's rendering we need to handle scrolling
 // ourselves whenever the first line number changes.
 Tooltip.prototype._genRenderListener = function() {
-    var renderer = this._lh_editor.renderer;
+    var renderer = this._lhEditor.renderer;
     var firstRowScreen = renderer.layerConfig.firstRowScreen;
     var top = parseFloat(this._tooltip.tooltip.css('top'));
     var that = this;
@@ -139,7 +139,7 @@ Tooltip.prototype._stopListeners = function() {
   if (this._listeners != null) {
     $(document).off('mousemove', this._listeners.mouse);
     $(document).off('keydown', this._listeners.key);
-    this._lh_editor.renderer.off('afterRender', this._listeners.render);
+    this._lhEditor.renderer.off('afterRender', this._listeners.render);
     this._listeners = null;
   }
 }

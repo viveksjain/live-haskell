@@ -56,10 +56,10 @@ LiveHaskell.prototype.setOutput = function(contents) {
 }
 
 // Show and start appropriate listeners.
-LiveHaskell.prototype.enable = function(file_selector) {
+LiveHaskell.prototype.enable = function(fileSelector) {
   if (!this._isEnabled) {
     this._isEnabled = true;
-    file_selector.hide();
+    fileSelector.hide();
     $('#live_haskell').show();
 
     if (!localStorage.seen) {
@@ -67,7 +67,7 @@ LiveHaskell.prototype.enable = function(file_selector) {
         // Fails in Safari private browsing mode
         localStorage.seen = true;
       } catch (e) {}
-      show_help();
+      showHelp();
     }
 
     var that = this;
