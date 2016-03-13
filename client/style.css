@@ -163,7 +163,7 @@ button {
 
 #help {
   pointer-events: all;
-  background-color: #376EFF;
+  background-color: #467FFE;
   position: absolute;
   right: 12px;
   bottom: 10px;
@@ -177,4 +177,12 @@ button {
 /* Allow clicking on helper layer to close it. */
 .chardinjs-helper-layer {
   pointer-events: none;
+}
+
+body .chardinjs-tooltip {
+  max-width: 240px;
+}
+
+body .chardinjs-tooltip.chardinjs-left {
+  margin-left: -175px;
 }
