@@ -151,10 +151,10 @@ openStackHandler session = do
                             runGHCI session (runCd dp')
                             return $ FileContents dp' fp' s
   filename' <- getParam $ "filename" :: Snap (Maybe BS.ByteString)
-  dirname'  <- getParam $ "dirname" :: Snap (Maybe BS.ByteString)
   filename  <- return . param $ filename'
-  dirname   <- return . param $ dirname'
-  liftIO (read dirname filename) >>= writeJSON
+  file      <- return . getFilename $ filename
+  dirname   <- return . getDirpath $ filename
+  liftIO (read dirname file) >>= writeJSON
 
 traceHandler :: GHCISession -> Snap ()
 traceHandler session = do
@@ -218,3 +218,9 @@ stringToJSON s = String . Text.pack $ s
 -- a much shorter alias for stringToJSON
 s2j :: String -> Value
 s2j = stringToJSON
+
+getFilename :: ByteString -> ByteString
+getFilename f = last $ BC.split '/' f
+
+getDirpath :: ByteString -> ByteString
+getDirpath f = BC.intercalate "/" . init $ BC.split '/' f
