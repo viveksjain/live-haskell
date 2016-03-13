@@ -1,4 +1,4 @@
--- https://github.com/snapframework/snap/blob/0.14-stable/project_template/barebones/src/Main.hs
+ -- https://github.com/snapframework/snap/blob/0.14-stable/project_template/barebones/src/Main.hs
 {-# LANGUAGE OverloadedStrings #-}
 module Main where
 
@@ -9,9 +9,11 @@ import Snap.Extras.JSON
 
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson
+import Data.Aeson.Types(Pair)
 import Data.ByteString(ByteString)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BC
+import qualified Data.Vector as Vector (fromList)
 import Data.Map.Strict(Map)
 import qualified Data.Map.Strict as Map
 import qualified Data.Maybe as Maybe (fromMaybe)
@@ -92,6 +94,10 @@ decodeResult res = case res of
   Left errs     -> EvalOutput "" "" $ Map.fromListWith (++) $ map (\(ErrorMessage _ line _ msg) -> (line, msg)) errs
   Right result  -> EvalOutput result "" Map.empty
 
+decodeTraceResult :: Either [ErrorMessage] ([TracingStep], String) -> TraceOutput
+decodeTraceResult (Left errs) = TraceOutput "" [] $ Map.fromListWith (++) $ map (\(ErrorMessage _ line _ msg) -> (line, msg)) errs
+decodeTraceResult (Right (ts, s)) = TraceOutput s ts Map.empty
+
 typeAtHandler :: MVar GHCISession -> Snap ()
 typeAtHandler mvar = do
   filename'   <- getParam "filename"
@@ -171,11 +177,8 @@ traceHandler mvar = do
   let param    = BC.unpack . (Maybe.fromMaybe "main") $ param' :: String
       filename = BC.unpack . (Maybe.fromMaybe "Main.hs") $ filename' :: FilePath
       res   = withMVar mvar $ \session -> runGHCI session $ runStmtWithTracing filename param :: IO (Either [ErrorMessage] ([TracingStep], String))
-      flatten :: Either [ErrorMessage] ([TracingStep], String) -> IO (Either [ErrorMessage] String)
-      flatten (Left err) = return $ Left err
-      flatten (Right (steps, s))  = return $ Right $ s ++ show steps
-  stmtResult <- liftIO $ res >>= flatten
-  writeJSON . decodeResult $ stmtResult
+  stmtResult <- liftIO $ res
+  writeJSON . decodeTraceResult $ stmtResult
 
 createNewProjectDirectory :: IO (FilePath, FilePath, String)
 createNewProjectDirectory = do
@@ -219,6 +222,12 @@ instance (Show k, ToJSON v) => ToJSON (Map k v) where
 
 data OpenOutput = FileContents FilePath FilePath String | OpenError SomeException | NoFilePathSupplied | NotStackProject
 
+data TraceOutput = TraceOutput {
+  trace_output :: String,
+  steps :: [TracingStep],
+  trace_errors :: Map Int String  -- map from line numbers to error messages
+}
+
 instance ToJSON OpenOutput where
   toJSON (NoFilePathSupplied)  = object ["endpoint" .= s2j "/open", "status" .= s2j "error", "details" .= s2j "no file path supplied by user"]
   toJSON (NotStackProject)  = object ["endpoint" .= s2j "/open", "status" .= s2j "error", "details" .= s2j "not a stack project"]
@@ -237,3 +246,13 @@ getFilename f = last $ BC.split '/' f
 
 getDirpath :: ByteString -> ByteString
 getDirpath f = BC.intercalate "/" . init $ BC.split '/' f
+
+instance ToJSON TraceOutput where
+  toJSON (TraceOutput out steps errs) = object ["output" .= out, "steps" .= steps, "errors" .= errs]
+
+instance ToJSON TracingStep where
+  toJSON (TS (_, lineNo) vars)  = Array $ Vector.fromList [toJSON lineNo, object (prettyVars vars)]
+    where
+      prettyVars :: Map String String -> [Pair]
+      prettyVars m | Map.null m = []
+                   | otherwise  = Map.foldrWithKey (\k a b -> (Text.pack k .= Text.pack a) : b ) [] m
