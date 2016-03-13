@@ -19,7 +19,7 @@ import qualified Data.Text as Text (pack)
 import Control.Exception
 import System.IO (Handle, IOMode(WriteMode))
 import qualified System.Directory as Dir (doesFileExist, getCurrentDirectory)
-import System.FilePath ((</>))
+import System.FilePath ((</>), takeDirectory)
 import qualified System.IO as IO (hClose, hFlush, openFile, openTempFile, readFile)
 import qualified System.IO.Temp as IO.Temp (createTempDirectory)
 import qualified SystemPathCopy as Path (copyDir)
@@ -185,7 +185,12 @@ createNewProjectDirectory = do
   readFile file >>= \s -> return (to, "app" </> "Main.hs", s)
 
 isStackProject :: FilePath -> IO Bool
-isStackProject fp = Dir.doesFileExist $ fp </> "stack.yaml"
+isStackProject "/" = return False
+isStackProject fp = do
+  exists <- Dir.doesFileExist $ fp </> "stack.yaml"
+  if exists
+    then return True
+    else isStackProject $ takeDirectory fp
 
 writeAndLoad :: MVar GHCISession -> (FilePath, Handle) -> ByteString -> IO EvalOutput
 writeAndLoad mvar (filePath,h) script = withMVar mvar $ \session -> do
