@@ -29,6 +29,11 @@ expectChar c = ErrorParser $ \s -> case s of
   (x:xs) | x == c -> Just ((), xs)
   _ -> Nothing
 
+isEof :: ErrorParser Bool
+isEof = ErrorParser $ \s -> case s of
+  [] -> Just (True, [])
+  x -> Just (False, x)
+
 eatWhitespace :: ErrorParser ()
 eatWhitespace = ErrorParser $ \s -> case s of
   [] -> Just ((), [])
@@ -62,11 +67,16 @@ dropWhileAtMost f n (x:xs) | f x = dropWhileAtMost f (n-1) xs
 parseOneError :: ErrorParser ErrorMessage
 parseOneError = do
   filename <- eatUntil ':'
-  line <- fmap (safeRead 0) (eatUntil ':')
-  col <- fmap (safeRead 0) (eatUntil ':')
-  msg1 <- eatUntil '\n'
-  let msg1' = dropWhile isSpace msg1
-  let readLoop = do
+  rawLine <- eatUntil ':'
+  eof <- isEof
+  if eof
+   then return $ ErrorMessage "" 0 0 (filename ++ ":" ++ rawLine)
+   else do
+    let line = safeRead 0 rawLine
+    col <- fmap (safeRead 0) (eatUntil ':')
+    msg1 <- eatUntil '\n'
+    let msg1' = dropWhile isSpace msg1
+    let readLoop = do
         mc <- peekNextChar
         case mc of
           Nothing -> return []
@@ -76,9 +86,9 @@ parseOneError = do
             rest <- readLoop
             return $ msg' ++ '\n' : rest
           _ -> return []
-  msgrest <- readLoop
-  let fullmsg = dropWhile isSpace $ msg1' ++ '\n' : msgrest
-  return $ ErrorMessage filename line col fullmsg
+    msgrest <- readLoop
+    let fullmsg = dropWhile isSpace $ msg1' ++ '\n' : msgrest
+    return $ ErrorMessage filename line col fullmsg
 
 parseAllErrors :: ErrorParser [ErrorMessage]
 parseAllErrors = do
