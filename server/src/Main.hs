@@ -37,7 +37,6 @@ main = bracket (startGHCI "../test") stopGHCI $ \initialSession -> do
     runLoad "./app/Main.hs"
     runStmtWithTracing "app/Main.hs" "main" >>= liftIO . print
   putStrLn "runGHCI ok"
-  -- runGHCI session $ runLoad "/tmp/test.hs" This should go in the new open handler
   quickHttpServe $ site mvar
 
 site :: MVar GHCISession -> Snap ()
@@ -46,9 +45,7 @@ site session =
           , ("reload", method POST $ reloadHandler session)
           , ("type-at", method POST $ typeAtHandler session)
           , ("command", method POST $ commandHandler session)
-          --, ("open", method POST $ openHandler)
-          -- , ("openStack/:dirname/:filename", openStackHandler session) --for testing only
-          , ("open", method POST $ openStackHandler session)
+          , ("open", method POST $ openHandler session)
           , ("trace", method POST $ traceHandler session)
           , ("foo", writeBS "bar")
           , ("echo/:echoparam", echoHandler)
@@ -116,29 +113,14 @@ typeAtHandler mvar = do
       writeJSON evalOutput
     _ -> return ()
 
-openHandler :: Snap ()
-openHandler =
-  let param :: Maybe BS.ByteString -> BS.ByteString
-      param p = Maybe.fromMaybe BS.empty p
-      read :: BS.ByteString -> IO OpenOutput
-      read fp | BS.null fp = return NoFilePathSupplied
-              | otherwise = do
-                let fp' = BC.unpack fp :: FilePath
-                result <- try (IO.readFile fp') :: IO (Either SomeException String)
-                case result of
-                  Left ex -> return . OpenError $ ex
-                  Right s -> return $ FileContents fp' fp' s
-  in
-    getParam "filename" >>= liftIO . read . param >>= writeJSON
-
-openStackHandler :: MVar GHCISession -> Snap ()
-openStackHandler mvar = do
+openHandler :: MVar GHCISession -> Snap ()
+openHandler mvar = do
   oldsession <- liftIO $ takeMVar mvar
   liftIO $ stopGHCI oldsession
   let param :: Maybe BS.ByteString -> BS.ByteString
       param p = Maybe.fromMaybe BS.empty p
-      read :: BS.ByteString -> BS.ByteString -> IO OpenOutput
-      read dp fp | BS.null dp = do
+      open :: BS.ByteString -> BS.ByteString -> IO OpenOutput
+      open dp fp | BS.null dp = do
                     (d,f,s) <- createNewProjectDirectory
                     newsession <- startGHCI d
                     putMVar mvar newsession
@@ -150,11 +132,7 @@ openStackHandler mvar = do
                         fp' = BC.unpack fp :: FilePath
                     isStack <- isStackProject dp' :: IO Bool
                     case isStack of
-                      False -> return NotStackProject -- commented out while testing without UI changes
-                      -- False -> do
-                      --   (d,f,s) <- createNewProjectDirectory
-                      --   runGHCI session (runCd d)
-                      --   return $ FileContents d f s
+                      False -> return NotStackProject
                       True  -> do
                         result <- try (IO.readFile (dp' </> fp')) :: IO (Either SomeException String)
                         case result of
@@ -168,7 +146,7 @@ openStackHandler mvar = do
   filename  <- return . param $ filename'
   file      <- return . getFilename $ filename
   dirname   <- return . getDirpath $ filename
-  liftIO (read dirname file) >>= writeJSON
+  liftIO (open dirname file) >>= writeJSON
 
 traceHandler :: MVar GHCISession -> Snap ()
 traceHandler mvar = do
@@ -203,7 +181,7 @@ writeAndLoad mvar (filePath,h) script = withMVar mvar $ \session -> do
   IO.hFlush h
   IO.hClose h
   res <- runGHCI session $ do
-    runLoad filePath -- runReload
+    runReload
   return . decodeResult $ res
 
 data EvalOutput = EvalOutput {
