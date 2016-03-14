@@ -17,6 +17,56 @@ function LiveHaskell() {
       that.getType();
     }
   });
+  // Add gutter to the help overlay
+  this._editor.renderer.once('afterRender', function(ev) {
+    var $gutter = $('#editor .ace_gutter');
+    $gutter.attr('data-intro', 'Double click on a line to trace it');
+    $gutter.attr('data-position', 'right');
+  });
+  // Prevent gutter clicks from selecting text.
+  this._editor.on('guttermousedown', function(ev) {
+    ev.stop();
+  });
+  // Set lines to watch by clicking on the gutter, based on
+  // https://groups.google.com/forum/#!msg/ace-discuss/sfGv4tRWZdY/ca1LuolbLnAJ
+  this._editor.on('gutterdblclick', function(ev) {
+    var target = ev.domEvent.target;
+    if (target.className.indexOf('ace_gutter-cell') == -1) return;
+
+    var row = ev.getDocumentPosition().row;
+    if (target.className.indexOf('ace_breakpoint') == -1) {
+      that._editor.session.setBreakpoint(row);
+    } else {
+      that._editor.session.clearBreakpoint(row);
+    }
+  });
+  this._editor.session.doc.on('change', function(ev) {
+    var len, firstRow, f1;
+    if (ev.end.row == ev.start.row) return;
+    if (ev.action == 'insert') {
+      len = ev.end.row - ev.start.row;
+      firstRow = ev.start.column == 0 ? ev.start.row: ev.start.row + 1;
+    } else if (ev.action == 'remove') {
+      len = ev.start.row - ev.end.row
+      firstRow = ev.start.row;
+    }
+
+    if (len > 0) {
+      var args = Array(len);
+      args.unshift(firstRow, 0);
+      this.$breakpoints.splice.apply(this.$breakpoints, args);
+    } else if (len < 0) {
+      var rem = this.$breakpoints.splice(firstRow + 1, -len);
+      if (!this.$breakpoints[firstRow]) {
+        for (var oldBP in rem) {
+          if (rem[oldBP]) {
+            this.$breakpoints[firstRow] = rem[oldBP]
+            break
+          }
+        }
+      }
+    }
+  }.bind(this._editor.session));
 
   this._output = createReadOnlyEditor('output');
 }
@@ -97,25 +147,6 @@ LiveHaskell.prototype.enable = function(fileSelector) {
   }
 }
 
-LiveHaskell.prototype.traceInput = function() {
-  var that = this;
-  this._reloadInput(function(isReloaded, hasErrors) {
-    if (hasErrors) return;
-    var command = that._commander.getInput();
-    if (!isReloaded && that._evaluatedCommand == command) {
-      console.log('Command already evaluated');
-      return;
-    }
-    that._evaluatedCommand = command;
-    $.post('trace', {
-      filename: that._filename,
-      script: that._evaluatedCommand,
-    }, function(result) {
-      console.log(result);
-    });
-  });
-}
-
 // `cb` is passed whether the input was reloaded, and whether the input has
 // errors.
 LiveHaskell.prototype._reloadInput = function(cb) {
@@ -184,6 +215,47 @@ LiveHaskell.prototype.getType = function() {
       new Tooltip($elem, result.output, that._editor);
     });
   });
+}
+
+LiveHaskell.prototype.traceInput = function() {
+  var that = this;
+  this._reloadInput(function(isReloaded, hasErrors) {
+    if (hasErrors) return;
+    var command = that._commander.getInput();
+    if (!isReloaded && that._evaluatedCommand == command) {
+      console.log('Command already evaluated');
+      that._showTrace(that._tracedResult);
+      return;
+    }
+    that._evaluatedCommand = command;
+    $.post('trace', {
+      filename: that._filename,
+      script: that._evaluatedCommand,
+    }, function(result) {
+      // TODO errors
+      console.log(result);
+      that._tracedResult = result;
+      that._showTrace(that._tracedResult);
+    });
+  });
+}
+
+LiveHaskell.prototype._showTrace = function(traceOutput) {
+  var breakpoints = this._editor.session.$breakpoints;
+  var steps = traceOutput.steps;
+  var aceInfo = [];
+  for (var i = 0; i < steps.length; i++) {
+    var step = steps[i];
+    var row = step[0] - 1;  // 0 indexed
+    if (breakpoints[row] == null) continue;
+    var values = step[1];
+    aceInfo.push({
+      row: row,
+      text: JSON.stringify(values),
+      type: 'info',
+    });
+  }
+  this._editor.session.setAnnotations(aceInfo);
 }
 
 LiveHaskell.prototype.setRefresher = function(refresher) {
