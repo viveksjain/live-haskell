@@ -108,12 +108,13 @@ readUntilPrompt stdout = do
         -- not [^]]
         let promptRegex = mkRegex "^ ?(\\[[^]]+\\])?[ A-Za-z0-9.*]*>"
         line <- hReadUntil stdout "\n>"
-        putStrLn $ "Read stdout: " ++ line
         case matchRegex promptRegex line of
           Nothing -> do
+            putStrLn $ "Read stdout: " ++ line
             rest <- readLoop
             return $ line ++ rest
           Just _ -> do
+            putStrLn $ "Found prompt: " ++ line
             _ <- hGetChar stdout  -- eat one more space
             return [] -- and eat the prompt
   readLoop
