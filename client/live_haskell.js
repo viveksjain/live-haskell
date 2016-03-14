@@ -20,7 +20,7 @@ function LiveHaskell() {
   // Add gutter to the help overlay
   this._editor.renderer.once('afterRender', function(ev) {
     var $gutter = $('#editor .ace_gutter');
-    $gutter.attr('data-intro', 'Double click on a line to trace it');
+    $gutter.attr('data-intro', 'Double click on a line to trace its values whenever it is reached');
     $gutter.attr('data-position', 'topright');
   });
   // Prevent gutter clicks from selecting text.
