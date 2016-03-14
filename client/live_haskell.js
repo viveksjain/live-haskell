@@ -121,25 +121,9 @@ LiveHaskell.prototype.enable = function(fileSelector) {
     }
 
     var that = this;
-    var debounced = debounce(function() {
-      that.traceInput();
-    }, 300, {
-      leading: true,
-      trailing: true,
-    });
-    // Evaluate on enter inside editor. Needs to be keyup so we get updated
-    // input text.
-    $('#editor').keyup(function(ev) {
-      if (ev.which == 13 && !(ev.metaKey || ev.ctrlKey)) {
-        // Debounce enter key, but not Cmd-/Ctrl-Enter since the user is
-        // explicitly evaluating in the latter case.
-        debounced();
-      }
-    });
-
-    // Evaluate on Cmd-/Ctrl-Enter anywhere in the window.
+    // Evaluate on Cmd-/Ctrl-S anywhere in the window.
     $(document).keydown(function(ev) {
-      if (ev.which == 13 && (ev.metaKey || ev.ctrlKey)) {
+      if (ev.which == 83 && (ev.metaKey || ev.ctrlKey)) {
         ev.preventDefault();
         that.traceInput();
       }
