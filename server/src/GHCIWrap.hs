@@ -244,7 +244,7 @@ prepareToRunStmt stmt = do
              | otherwise -> PureFunction
 
 runWithStyle :: ExecStyle -> GHCI String
-runWithStyle PureFunction = runGHCICommand "print it" >>= return . getStmtResult
+runWithStyle PureFunction = runGHCICommand "runTIO $ print it" >>= return . getStmtResult
 runWithStyle TIO = runGHCICommand "runTIO it" >>= return . getStmtResult
 runWithStyle Reject = fail "Unsandboxed IO action is not allowed"
 
