@@ -121,11 +121,27 @@ LiveHaskell.prototype.enable = function(fileSelector) {
     }
 
     var that = this;
+    var debounced = debounce(function() {
+      that._reloadInput();
+    }, 300, {
+      leading: true,
+      trailing: true,
+    });
+    // Evaluate on enter inside editor. Needs to be keyup so we get updated
+    // input text.
+    $('#editor').keyup(function(ev) {
+      if (ev.which == 13 && !(ev.metaKey || ev.ctrlKey)) {
+        // Debounce enter key, but not Cmd-/Ctrl-Enter since the user is
+        // explicitly evaluating in the latter case.
+        debounced();
+      }
+    });
+
     // Evaluate on Cmd-/Ctrl-S anywhere in the window.
     $(document).keydown(function(ev) {
       if (ev.which == 83 && (ev.metaKey || ev.ctrlKey)) {
         ev.preventDefault();
-        that.traceInput();
+        that.traceInput(true);
       }
     });
   }
@@ -133,8 +149,8 @@ LiveHaskell.prototype.enable = function(fileSelector) {
 
 // `cb` is passed whether the input was reloaded, and whether the input has
 // errors.
-LiveHaskell.prototype._reloadInput = function(cb) {
-  if (!this.isOutputChanged()) {
+LiveHaskell.prototype._reloadInput = function(cb, force) {
+  if (!force && !this.isOutputChanged()) {
     console.log('Output already up-to-date');
     if (cb) cb(false, this._hadErrors);
     return;
@@ -201,7 +217,7 @@ LiveHaskell.prototype.getType = function() {
   });
 }
 
-LiveHaskell.prototype.traceInput = function() {
+LiveHaskell.prototype.traceInput = function(force) {
   var that = this;
   this._reloadInput(function(isReloaded, hasErrors) {
     if (hasErrors) return;
@@ -221,7 +237,7 @@ LiveHaskell.prototype.traceInput = function() {
       that._tracedResult = result;
       that._showTrace(that._tracedResult);
     });
-  });
+  }, force);
 }
 
 LiveHaskell.prototype._showTrace = function(traceOutput) {
