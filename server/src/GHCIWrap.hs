@@ -210,6 +210,7 @@ startGHCI targetDir = do
     runGHCICommand_ ":set -XImplicitPrelude"
     runGHCICommand_ ":set -main-is Prelude.hiddenDummyMain"
     runGHCICommand_ "import qualified System.TIO"
+    runGHCICommand_ ":set -fdefer-type-errors"
   return session
 
 stopGHCI :: GHCISession -> IO ExitCode
@@ -277,7 +278,7 @@ instance GHCIResult TypeResult where
   readGHCI = TypeResult . parseType
 
 runType :: String -> GHCI String
-runType expr = runGHCICommand (":t " ++ expr) >>= return . getTypeResult
+runType expr = runGHCICommand (":t (" ++ expr ++ ")") >>= return . getTypeResult
 
 runAddBreakpoint :: String -> GHCI ()
 runAddBreakpoint expr = runGHCICommand_ (":break " ++ expr)
@@ -375,5 +376,5 @@ data SrcLoc = SrcLoc !Int !Int
 
 runTypeAt :: FilePath -> SrcLoc -> SrcLoc -> String -> GHCI String
 runTypeAt filePath (SrcLoc line_start col_start) (SrcLoc line_end col_end) stmt = do
-  res <- runGHCICommand $ printf ":type-at %s %d %d %d %d %s" filePath line_start col_start line_end col_end stmt
+  res <- runGHCICommand $ printf ":type-at %s %d %d %d %d (%s)" filePath line_start col_start line_end col_end stmt
   return $ getStmtResult res

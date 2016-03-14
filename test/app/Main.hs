@@ -10,8 +10,11 @@ import Data.Monoid
 
 import Lib
 
-add :: Num a => a -> a -> a
-add !x y = x + y
+invalid :: String
+invalid = 7
+
+add :: Num b => b -> b -> b
+add !x y = x + y 
 
 add' :: Num a => a -> a -> a
 add' = (+)
@@ -19,7 +22,7 @@ add' = (+)
 add'' :: Num a => a -> a -> a
 add'' x = add x
 
-foo = "bla" <> BC.pack "bla"
+foo = "bla" <> BC.pack "bla" 
 
 main :: IO ()
 main = do
