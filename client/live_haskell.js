@@ -150,7 +150,7 @@ LiveHaskell.prototype.enable = function(fileSelector) {
 // `cb` is passed whether the input was reloaded, and whether the input has
 // errors.
 LiveHaskell.prototype._reloadInput = function(cb, force) {
-  if (!force && !this.isOutputChanged()) {
+  if (!force && !this._isInputChanged()) {
     console.log('Output already up-to-date');
     if (cb) cb(false, this._hadErrors);
     return;
@@ -163,9 +163,7 @@ LiveHaskell.prototype._reloadInput = function(cb, force) {
     script: this._editor.getValue(),
   }, function(result) {
     console.log(result);
-    that._evaluatedEditCount = editCount;
-    that.setOutput(result.output || result.error, 1);
-
+    that._savedEditCount = editCount;
     var errors = result.errors;
     var aceErrors = [];
     for (var k in errors) {
@@ -218,23 +216,19 @@ LiveHaskell.prototype.getType = function() {
 }
 
 LiveHaskell.prototype.traceInput = function(force) {
+  var editCount = this._editCounter;
   var that = this;
   this._reloadInput(function(isReloaded, hasErrors) {
     if (hasErrors) return;
-    var command = that._commander.getInput();
-    if (!isReloaded && that._evaluatedCommand == command) {
-      console.log('Command already evaluated');
-      that._showTrace(that._tracedResult);
-      return;
-    }
-    that._evaluatedCommand = command;
     $.post('trace', {
       filename: that._filename,
-      script: that._evaluatedCommand,
+      script: that._commander.getInput(),
     }, function(result) {
       // TODO errors
       console.log(result);
+      that._evaluatedEditCount = editCount;
       that._tracedResult = result;
+      that.setOutput(result.output);
       that._showTrace(that._tracedResult);
     });
   }, force);
@@ -274,4 +268,10 @@ LiveHaskell.prototype.onChange = function(cb) {
 // evaluated.
 LiveHaskell.prototype.isOutputChanged = function() {
   return this._editCounter !== this._evaluatedEditCount;
+}
+
+// Return true if the current buffer is not the same as what was most recently
+// reloaded.
+LiveHaskell.prototype._isInputChanged = function() {
+  return this._editCounter !== this._savedEditCount;
 }
