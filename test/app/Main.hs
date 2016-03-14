@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, OverloadedLists #-}
+{-# LANGUAGE OverloadedStrings, OverloadedLists, BangPatterns #-}
 module Main where
 
 import System.IO
@@ -11,7 +11,7 @@ import Data.Monoid
 import Lib
 
 add :: Num a => a -> a -> a
-add x y = x + y
+add !x y = x + y
 
 add' :: Num a => a -> a -> a
 add' = (+)

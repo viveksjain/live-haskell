@@ -24,6 +24,8 @@ import HsDecls
 import RdrName
 import OccName
 import FastString
+import HeaderInfo(getOptions)
+import StringBuffer(stringToStringBuffer)
 
 -- Standard Haskell libraries
 import System.IO
@@ -84,14 +86,19 @@ formatError err =
     errMsg :: ErrMsg -> String
     errMsg err = showSDoc dynFlags $ errMsgShortDoc err <> errMsgExtraInfo err
 
-parseFile :: String -> FilePath -> Either [ErrorMessage] (HsModule GHC.RdrName)
-parseFile code filePath = case GHC.parser code dynFlags filePath of
+parseFile :: DynFlags -> String -> FilePath -> Either [ErrorMessage] (HsModule GHC.RdrName)
+parseFile dynFlags code filePath = case GHC.parser code dynFlags filePath of
   Left errs -> Left $ map formatError $ bagToList errs
   Right (_, mod) -> Right $ unLoc mod
 
 extractDecls :: String -> FilePath -> Either [ErrorMessage] (Set String)
 extractDecls code filePath = do
-  mod <- parseFile code filePath
+  let dynFlags' = unsafePerformIO $ do
+        (flags, _, _) <- GHC.parseDynamicFlags dynFlags options
+        return flags
+      options = getOptions dynFlags (stringToStringBuffer code) filePath
+  mod <- parseFile dynFlags' code filePath
+
   return $ S.fromList $ map fromJust $ filter isJust $ map extractdecl $ hsmodDecls mod
   where
     nameToString :: RdrName -> String
