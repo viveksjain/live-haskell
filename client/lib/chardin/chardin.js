@@ -116,8 +116,12 @@
         }, 10);
       };
 
-      chardinJs.prototype._get_position = function(element) {
-        return element.getAttribute('data-position') || 'bottom';
+      chardinJs.prototype._get_position = function(element, forceReal) {
+        var pos = element.getAttribute('data-position');
+        if (pos == 'topright' && !forceReal) {
+          return 'right';
+        }
+        return pos || 'bottom';
       };
 
       chardinJs.prototype._get_css_attribute = function(element) {
@@ -156,7 +160,7 @@
         tooltip_layer.style.right = null;
         tooltip_layer.style.bottom = null;
         tooltip_layer.style.left = null;
-        position = this._get_position(element);
+        position = this._get_position(element, true);
         switch (position) {
           case "top":
           case "bottom":
@@ -175,6 +179,12 @@
             tooltipActualWidth = parseFloat(this._getStyle(tooltip_layer, "width"));
             offset = 165 - (tooltipMaxWidth - tooltipActualWidth);
             return tooltip_layer.style[position] = "-" + offset + "px";
+          case "topright":
+            tooltipMaxWidth = parseFloat(this._getStyle(tooltip_layer, "max-width"));
+            tooltip_layer.style["right"] = "-" + tooltipMaxWidth + "px";
+            tooltipActualWidth = parseFloat(this._getStyle(tooltip_layer, "width"));
+            offset = 165 - (tooltipMaxWidth - tooltipActualWidth);
+            return tooltip_layer.style["right"] = "-" + offset + "px";
           case "on":
             target_element_position = this._get_offset(element);
             target_width = target_element_position.width;
@@ -182,7 +192,7 @@
 
             target_height = target_element_position.height;
             my_height = parseFloat(this._getStyle(tooltip_layer, "height"));
-            tooltip_layer.style.top = ((target_height / 2) - (my_height / 2)) + "px";
+            return tooltip_layer.style.top = ((target_height / 2) - (my_height / 2)) + "px";
         }
       };
 
