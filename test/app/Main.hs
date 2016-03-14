@@ -1,35 +1,32 @@
-{-# LANGUAGE OverloadedStrings, BangPatterns #-}
-module Main where
+{-# LANGUAGE RankNTypes, TupleSections #-}
 
-import System.IO
-import Data.Array.IO
-import Data.ByteString(ByteString)
-import qualified Data.ByteString as BS
-import qualified Data.ByteString.Char8 as BC
-import Data.Monoid
+import Control.Applicative
+import Data.Functor.Identity
 
-import Lib
+type Lens s t a b = forall f. Functor f =>
+                    (a -> f b) -> s -> f t
 
-bar = return=<<([1::Int,2,3]++[4,5])
+over :: Lens s t a b -> (a -> b) -> s -> t
+over l f s = runIdentity (l (Identity . f) s)
 
-invalid :: String
-invalid = "7"
+view :: Lens s t a b -> s -> a
+view l s = getConst (l Const s)
 
-add :: Int -> Int -> Int
-add !x y = x + y 
+_1 :: Lens (a,b) (c,b) a c
+_1 f (a,b) = (,b) <$> f a
 
-add' :: Num a => a -> a -> a
-add' = (+)
+_2 :: Lens (a,b) (a,c) b c
+_2 f (a,b) = (a,) <$> f b
 
-add'' :: Int -> Int -> Int
-add'' x' = add x'
+_head :: Lens [a] [a] a a
+_head f (a:as) = (:as) <$> f a
 
-foo = "bla" <> "bla" 
 
-main :: IO ()
+
+
+
+
+test2 = view (_1 . _head)
+
 main = do
-  putStrLn $ BC.unpack foo
-  putStrLn $ invalid
-  writeFile "/tmp/foo" "bla"
-  print $ add' 2.3 4.7
-  print $ add undefined 3 * add' 1 3 * add'' 0 1
+  print $ view (_1 . _head) ("foo",True)
