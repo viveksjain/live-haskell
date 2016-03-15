@@ -2,6 +2,7 @@
 
 import Data.Text
 
+main :: IO ()
 main = do
   input <- getTest
   putStrLn input
