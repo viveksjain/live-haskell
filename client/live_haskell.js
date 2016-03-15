@@ -242,13 +242,20 @@ LiveHaskell.prototype._showTrace = function(traceOutput) {
     var step = steps[i];
     var row = step[0] - 1;  // 0 indexed
     if (breakpoints[row] == null) continue;
-    var values = step[1];
+    var variables = step[1];
+    var valuesStr = [];
+    for (var varname in variables) {
+      if (variables.hasOwnProperty(varname)) {
+        valuesStr.push(varname + ' = ' + variables[varname]);
+      }
+    }
     aceInfo.push({
       row: row,
-      text: JSON.stringify(values),
+      text: '{' + valuesStr.join(', ') + '}',
       type: 'info',
     });
   }
+  window.v = steps;
   this._editor.session.setAnnotations(aceInfo);
 }
 
