@@ -8,8 +8,8 @@ main = do
   let output = unpack $ replace "hello" "bye" $ pack input
   putStrLn output
 
-getTest = readFile "/Users/vivek/Desktop/test.txt"
+getTest = readFile "./test.txt"
 
-writeTest = writeFile "/Users/vivek/Desktop/test.txt"
+writeTest = writeFile "./test.txt"
 
 printTest = getTest >>= putStrLn

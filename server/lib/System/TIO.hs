@@ -130,11 +130,16 @@ ensureDirectory file = do
     isInterestingError = pure (||) <*> isDoesNotExistError <*> isAlreadyExistsError
     maybeInterestingError e = if isInterestingError e then Just e else Nothing
 
+makeSandboxPath :: FilePath -> IO FilePath
+makeSandboxPath path = do
+  cwd <- getWorkingDirectory
+  return $ case path of
+    '/':_ -> sandboxPath </> tail path
+    _ -> sandboxPath </> (tail cwd) </> path
+
 openFile :: FilePath -> IOMode -> TIO Handle
 openFile path mode = TIO $ do
-  let insandbox = case path of
-        '/':_ -> sandboxPath </> tail path
-        _ -> sandboxPath </> path
+  insandbox <- makeSandboxPath path
   --putStrLn $ "insandbox path " ++ insandbox
   exist <- fileExist insandbox
   when (not exist) $ do

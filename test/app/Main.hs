@@ -2,6 +2,7 @@
 
 import Control.Applicative
 import Data.Functor.Identity
+import Data.Char
 
 type Lens s t a b = forall f. Functor f =>
                     (a -> f b) -> s -> f t
@@ -21,12 +22,8 @@ _2 f (a,b) = (a,) <$> f b
 _head :: Lens [a] [a] a a
 _head f (a:as) = (:as) <$> f a
 
+test = test2 ("foo",True)
 
+test2 = view (_head . _1)
 
-
-
-
-test2 = view (_1 . _head)
-
-main = do
-  print $ view (_1 . _head) ("foo",True)
+main = print test
