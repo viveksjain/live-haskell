@@ -29,6 +29,7 @@ import System.FilePath((</>))
 import Data.Char
 import Text.Regex
 import Text.Printf
+import Debug.Trace
 
 -- import Control.Applicative
 import Control.Monad
@@ -37,6 +38,7 @@ import Control.Monad.IO.Class
 import Control.Monad.Trans.Writer.Strict
 import Control.Monad.Trans.Class
 import Data.Monoid
+import Data.List
 
 import Data.Map.Strict(Map)
 import qualified Data.Map.Strict as M
@@ -321,7 +323,7 @@ parseTracingStep step =
   in
    case stoppedAndVars of
      [] -> Done (unlines output)
-     (stopped:vars) -> Stopped (TS (parseStopped stopped) (M.fromList $ map parseOneResult vars)) (unlines output)
+     (stopped:vars) -> Stopped (TS (parseStopped stopped) (M.fromList $ map parseOneResult $ compactLines vars)) (unlines output)
   where
     parseStopped :: String -> (FilePath, Int)
     parseStopped line =
@@ -337,9 +339,22 @@ parseTracingStep step =
     parse what = case reads what of
       [(x, _)] -> x
       _ -> error $ "cannot parse " ++ what
+    startsWithSpace :: String -> Bool
+    startsWithSpace (x:_) | isSpace x = True
+    startsWithSpace _ = False
+    dropLastIf :: (a -> Bool) -> [a] -> [a]
+    dropLastIf _ [] = []
+    dropLastIf f [x] | f x = []
+    dropLastIf f (x:xs) = x:dropLastIf f xs
+    -- compact lines of the form "one ::\n  two\n  three" into "one :: two three"
+    compactLines :: [String] -> [String]
+    compactLines [] = []
+    compactLines (x:xs) = case span startsWithSpace xs of
+      ([], rest) -> dropLastIf isSpace x : compactLines rest
+      (spaces, rest) -> (dropLastIf isSpace x ++ " " ++ intercalate " " (fmap (dropLastIf isSpace . (dropWhile isSpace)) spaces)) : compactLines rest
     parseOneResult :: String -> (String, String)
     parseOneResult line =
-      case runMiniParser parseTracingLine line of
+      case runMiniParser parseTracingLine (traceShowId line) of
         Just (name, value) -> (name, value)
         Nothing -> ("*failed to parse*", "")
 
