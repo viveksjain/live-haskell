@@ -131,7 +131,7 @@ LiveHaskell.prototype.enable = function(fileSelector) {
     // input text.
     $('#editor').keyup(function(ev) {
       if (ev.which == 13 && !(ev.metaKey || ev.ctrlKey)) {
-        // Debounce enter key, but not Cmd-/Ctrl-Enter since the user is
+        // Debounce enter key, but not Cmd-/Ctrl-S since the user is
         // explicitly evaluating in the latter case.
         debounced();
       }
