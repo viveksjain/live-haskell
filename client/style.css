@@ -132,6 +132,10 @@ button {
   z-index: 9999999;
 }
 
+.ace_tooltip {
+  z-index: 10000000 !important;
+}
+
 #output_overlay.refreshable {
   background-color: rgba(0, 0, 0, 0.2);
 }
