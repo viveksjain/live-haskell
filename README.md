@@ -22,3 +22,7 @@ Showing type tooltip and inline errors.
 
 ![Tracing](screenshots/Tracing.png)
 Tracing the execution of tail recursive factorial.
+
+Usage
+-----
+You need to have [Stack](http://docs.haskellstack.org/en/stable/README/) installed. Once you do, open `server/` in your terminal, then run `stack build` and then `stack exec server`. Finally, open [http://localhost:8000/](http://localhost:8000/) in your browser.
